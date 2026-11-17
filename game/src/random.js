@@ -1,32 +1,35 @@
 // Seeded RNG for Solmar Bay — deterministic city, spawns and ?shot= scenes.
-// Rebuild r2: mulberry32 core kept, plus shuffle / weighted pick / gaussian /
-// string-hash helpers the rebuild's city and mission code uses.
+// Rebuild r3: the core is now xorshift32 (v2 used mulberry32), the string
+// hash is djb2, and the gaussian is Box-Muller with a cached spare value.
 (function () {
   'use strict';
   window.SB = window.SB || {};
 
-  function mulberry32(a) {
+  // xorshift32: fast, small, and good enough for procedural layout.
+  function xorshift32(seed) {
+    let a = seed >>> 0;
+    if (a === 0) a = 0x9e3779b9;
     return function () {
-      a |= 0; a = (a + 0x6D2B79F5) | 0;
-      let t = Math.imul(a ^ (a >>> 15), 1 | a);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      a ^= a << 13; a >>>= 0;
+      a ^= a >>> 17;
+      a ^= a << 5; a >>>= 0;
+      return (a >>> 0) / 4294967296;
     };
   }
 
-  // Stable 32-bit hash of a short string, for seeding sub-generators by name.
+  // djb2 string hash — seeds a sub-generator from a name.
   function hashStr(s) {
-    let h = 2166136261;
+    let h = 5381;
     for (let i = 0; i < s.length; i++) {
-      h ^= s.charCodeAt(i);
-      h = Math.imul(h, 16777619);
+      h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
     }
     return h >>> 0;
   }
 
   SB.RNG = {
     make: function (seed) {
-      const next = mulberry32(seed >>> 0);
+      const next = xorshift32(seed >>> 0);
+      let spare = null; // cached second normal for Box-Muller
       const api = {
         next: next,
         range: function (a, b) { return a + next() * (b - a); },
@@ -37,7 +40,7 @@
         shuffle: function (arr) {
           for (let i = arr.length - 1; i > 0; i--) {
             const j = Math.floor(next() * (i + 1));
-            const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+            const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
           }
           return arr;
         },
@@ -52,8 +55,16 @@
           }
           return pairs[pairs.length - 1][0];
         },
-        // approx. standard normal via the sum of three uniforms
-        gaussian: function () { return (next() + next() + next() - 1.5) * 1.1547; },
+        // standard normal via Box-Muller (caches the second draw)
+        gaussian: function () {
+          if (spare !== null) { const v = spare; spare = null; return v; }
+          let u = 0, v = 0;
+          while (u === 0) u = next();
+          v = next();
+          const m = Math.sqrt(-2 * Math.log(u));
+          spare = m * Math.sin(2 * Math.PI * v);
+          return m * Math.cos(2 * Math.PI * v);
+        },
         // a fresh generator seeded from this one plus a name
         fork: function (name) { return SB.RNG.make((hashStr(name) ^ Math.floor(next() * 1e9)) >>> 0); },
       };

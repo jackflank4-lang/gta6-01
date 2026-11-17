@@ -1,15 +1,17 @@
 // Synthesised WebAudio SFX + music for Solmar Bay. No audio files, no network.
-// Rebuild r2: the same best-effort engine, reorganised around a small synth
-// kit (tone / noise / sweep), with new sounds — skid, door slam, police radio
-// blip, coin chime — and a two-track radio (N switches patterns).
+// Rebuild r3: three radio tracks now (N cycles all three), new sounds —
+// jump whoosh, two-tone car horn, headlight click — and the synth kit
+// gains a detuned-pair helper the radio uses for its lead line.
 (function () {
   'use strict';
   window.SB = window.SB || {};
 
-  // Two radio patterns: A is the v1 bass-and-hat loop, B is a minor-key drive.
+  // Three radio patterns. A: bass-and-hat drive. B: minor-key cruise.
+  // C: a slower sunset groove with a detuned lead.
   const TRACKS = [
-    { name: 'NEON DRIVE', bass: [55, 0, 55, 0, 65.4, 0, 49, 0, 55, 0, 55, 0, 82.4, 0, 73.4, 0], stepMs: 240, hatEvery: 2 },
-    { name: 'KINGFISH BLUES', bass: [49, 0, 0, 58.3, 0, 49, 0, 0, 65.4, 0, 0, 58.3, 0, 73.4, 0, 0], stepMs: 300, hatEvery: 4 },
+    { name: 'NEON DRIVE', bass: [55, 0, 55, 0, 65.4, 0, 49, 0, 55, 0, 55, 0, 82.4, 0, 73.4, 0], stepMs: 240, hatEvery: 2, lead: null },
+    { name: 'KINGFISH BLUES', bass: [49, 0, 0, 58.3, 0, 49, 0, 0, 65.4, 0, 0, 58.3, 0, 73.4, 0, 0], stepMs: 300, hatEvery: 4, lead: null },
+    { name: 'SUNSET CRUISE', bass: [65.4, 0, 0, 0, 49, 0, 0, 0, 58.3, 0, 0, 0, 73.4, 0, 65.4, 0], stepMs: 320, hatEvery: 4, lead: [261.6, 0, 329.6, 0, 392, 0, 329.6, 0, 293.7, 0, 329.6, 0, 392, 0, 440, 0] },
   ];
 
   const AudioSys = {
@@ -49,6 +51,24 @@
         o.connect(g); g.connect(this.master);
         o.start(t); o.stop(t + dur + 0.02);
       } catch (e) { /* audio is best-effort */ }
+    },
+    // two slightly detuned oscillators for a fatter lead note
+    detuned: function (freq, dur, vol) {
+      if (!this.ctx || this.muted) return;
+      try {
+        const t = this.ctx.currentTime;
+        for (const det of [-6, 6]) {
+          const o = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          o.type = 'triangle';
+          o.frequency.setValueAtTime(freq, t);
+          o.detune.value = det;
+          g.gain.setValueAtTime((vol || 0.08) / 2, t);
+          g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+          o.connect(g); g.connect(this.master);
+          o.start(t); o.stop(t + dur + 0.02);
+        }
+      } catch (e) { /* best-effort */ }
     },
     at: function (delayMs, fn) { setTimeout(fn, delayMs); },
     noise: function (dur, vol, lowpass) {
@@ -92,6 +112,13 @@
     radio: function () { this.tone(950, 0.07, 'square', 0.08); this.at(90, () => this.tone(1250, 0.1, 'square', 0.08)); },
     engineStart: function () { this.tone(70, 0.5, 'sawtooth', 0.12, 160); },
     repair: function () { this.tone(440, 0.1, 'triangle', 0.15); this.at(120, () => this.tone(587, 0.12, 'triangle', 0.15)); this.at(240, () => this.tone(880, 0.2, 'triangle', 0.15)); },
+    jump: function () { this.noise(0.14, 0.12, 1200); this.tone(300, 0.18, 'sine', 0.14, 640); },
+    horn: function () {
+      this.tone(370, 0.22, 'square', 0.12);
+      this.tone(466, 0.22, 'square', 0.1);
+      this.at(260, () => { this.tone(370, 0.18, 'square', 0.1); this.tone(466, 0.18, 'square', 0.08); });
+    },
+    headlight: function () { this.tone(1500, 0.04, 'square', 0.09); },
     // --- continuous: engine + siren ---
     engineSet: function (speed01, on) {
       if (!this.ctx || this.muted) { if (this.engineGain) this.engineGain.gain.value = 0; return; }
@@ -107,7 +134,7 @@
           this.engineOsc.start();
         }
         const t = this.ctx.currentTime;
-        this.engineOsc.frequency.setTargetAtTime(60 + speed01 * 160, t, 0.08);
+        this.engineOsc.frequency.setTargetAtTime(60 + speed01 * 170, t, 0.08);
         this.engineGain.gain.setTargetAtTime(on ? 0.05 + speed01 * 0.05 : 0, t, 0.1);
       } catch (e) { /* best-effort */ }
     },
@@ -133,7 +160,7 @@
         }
       } catch (e) { /* best-effort */ }
     },
-    // --- radio: two bass-and-hat loops, scheduled; starts on user gesture ---
+    // --- radio: bass-and-hat loops with an optional lead, scheduled; starts on user gesture ---
     startMusic: function () {
       if (!this.ctx || this.musicTimer) return;
       this.musicTimer = setInterval(() => {
@@ -141,6 +168,10 @@
         const tr = TRACKS[this.track];
         const f = tr.bass[this.musicStep % tr.bass.length];
         if (f) this.tone(f, 0.22, 'triangle', 0.11);
+        if (tr.lead) {
+          const lf = tr.lead[this.musicStep % tr.lead.length];
+          if (lf) this.detuned(lf, 0.28, 0.09);
+        }
         if (this.musicStep % tr.hatEvery === 0) this.noise(0.03, 0.03, 6000);
         this.musicStep++;
       }, TRACKS[this.track].stepMs);

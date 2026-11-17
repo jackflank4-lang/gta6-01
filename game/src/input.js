@@ -1,6 +1,7 @@
 // Keyboard + mouse state for Solmar Bay. Classic script, no modules.
-// Rebuild r2: same edge-triggered core, plus a named key-binding table the
-// HUD reads, mouse-wheel zoom, and a "any key" hook the menus use.
+// Rebuild r3: SPACE is now jump on foot (handbrake stays in the car),
+// H honks the horn while driving, L toggles the headlights, and the
+// binding table the menu renders lists the new keys.
 (function () {
   'use strict';
   window.SB = window.SB || {};
@@ -10,7 +11,9 @@
     ['W A S D', 'walk / drive'],
     ['SHIFT', 'sprint'],
     ['E', 'enter / exit car (steal it!)'],
-    ['SPACE', 'handbrake'],
+    ['SPACE', 'jump on foot · handbrake in car'],
+    ['H', 'honk the horn · hold at Chop Shop to repair'],
+    ['L', 'headlights on / off'],
     ['Mouse', 'aim — drag to look around'],
     ['Click', 'shoot'],
     ['F', 'punch'],
@@ -35,7 +38,7 @@
         this.keys[e.code] = true;
         this.pressed[e.code] = true;
         this.anyKey = true;
-        if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+        if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.code) >= 0) e.preventDefault();
       });
       window.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
       window.addEventListener('blur', () => { this.keys = {}; this.mouseDown = false; this.dragging = false; });
