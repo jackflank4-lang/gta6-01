@@ -596,7 +596,7 @@ export class Game {
       h.punchCd = 0.45;
       this.audio.punch();
       const before = this.thugs.alive().length;
-      this.thugs.punchFrom(h.pos, h.heading, 2.4, 25);
+      this.thugs.punchFrom(h.pos, h.heading, 2.4, 34);
       const after = this.thugs.alive().length;
       if (after < before) {
         const kills = before - after;

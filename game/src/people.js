@@ -173,11 +173,11 @@ export class Thugs {
           if (legL) legL.rotation.x = swing;
           if (legR) legR.rotation.x = -swing;
         } else if (t.attackCd <= 0) {
-          t.attackCd = 0.95;
+          t.attackCd = 1.15;
           const armR = m.getObjectByName('armR');
           if (armR) armR.rotation.x = -1.4;
           setTimeout(() => { if (armR) armR.rotation.x = 0; }, 180);
-          onHitHero(t.boss ? 14 : 8, t);
+          onHitHero(t.boss ? 14 : 6, t);
         }
       } else {
         t.state = 'idle';
