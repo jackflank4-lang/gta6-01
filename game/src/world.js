@@ -952,7 +952,9 @@
           this.missionTarget = { x: places.chopshop.x, z: places.chopshop.z };
           this.updateMarker();
           this.events.push({ kind: 'info', text: 'NICE WHEELS', sub: 'Now take it to the Chop Shop — in one piece for the bonus.' });
-        } else if (m.stage === 1 && near(places.chopshop, 10)) {
+        } else if (m.stage === 1 && near(places.chopshop, 16)) {
+          // radius 16: a car can only close to ~11 of the shop centre
+          // (building collision), so 10 was unreachable — measured.
           this.completeMission();
         }
       } else if (this.missionIndex === 1) {
@@ -967,7 +969,9 @@
         if (m.stage === 0) {
           this.missionTarget = { x: places.diner.x, z: places.diner.z };
           this.updateMarker();
-          if (near(places.diner, 8)) {
+          if (near(places.diner, 14)) {
+            // radius 14: on foot the diner wall stops you ~10 from the
+            // centre (building collision), so 8 was unreachable — measured.
             m.stage = 1; m.package = true; m.timer = 90;
             this.events.push({ kind: 'info', text: 'PACKAGE SECURED', sub: '90 seconds to the Pier. Go!' });
             SB.Audio.pickup();
