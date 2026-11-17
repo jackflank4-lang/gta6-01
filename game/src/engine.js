@@ -44,11 +44,15 @@ export class Engine {
     this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 900);
     this.camera.position.set(0, 60, 140);
 
-    const hemi = new THREE.HemisphereLight(0x8a7ab5, 0x1a1420, 0.9);
+    const hemi = new THREE.HemisphereLight(0x8a7ab5, 0x1a1420, 1.1);
     this.scene.add(hemi);
     const sun = new THREE.DirectionalLight(0xff9a4a, 1.4);
     sun.position.set(-120, 90, -60);
     this.scene.add(sun);
+    // Cool fill from the opposite side so shadowed faces are never pitch black.
+    const fill = new THREE.DirectionalLight(0x6a7ab5, 0.4);
+    fill.position.set(120, 60, 120);
+    this.scene.add(fill);
 
     this.city = new City();
     this.scene.add(this.city.group);
@@ -114,8 +118,10 @@ export class Engine {
     this.hud.setObjective('Press Start — Lena Cruz is waiting at the hideout');
     if (this.shotMode) {
       stageShot(this, this.shotMode);
-      this.state = 'playing';
-      this.hud.hideMenu();
+      if (this.shotMode !== 'start') {
+        this.state = 'playing';
+        this.hud.hideMenu();
+      }
     }
     this._last = performance.now();
     this._loop = this._loop.bind(this);
@@ -369,9 +375,16 @@ export class Engine {
       this._update(dt);
     } else if (this.state === 'menu') {
       this.time += dt * 0.2;
-      const a = this.time * 0.05;
-      this.camera.position.set(Math.sin(a) * 130, 70, Math.cos(a) * 130);
-      this.camera.lookAt(this.city.tower.x, 40, this.city.tower.z);
+      if (this.shotMode === 'start') {
+        // Title shot: a fixed high view from the south over the marina,
+        // the city and the tower in frame (the orbit can hide behind a building).
+        this.camera.position.set(60, 95, 230);
+        this.camera.lookAt(0, 25, -20);
+      } else {
+        const a = this.time * 0.05;
+        this.camera.position.set(Math.sin(a) * 130, 70, Math.cos(a) * 130);
+        this.camera.lookAt(this.city.tower.x, 40, this.city.tower.z);
+      }
       this._pulseBeacon(dt);
     }
     this.renderer.render(this.scene, this.camera);

@@ -27,8 +27,9 @@ export function stageShot(engine, name) {
   }
 
   if (name === 'chase') {
-    // Wanted 3: Lena speeding down the boulevard with two cruisers pacing
-    // behind her, light bars flashing.
+    // Wanted 3: Lena speeding down the boulevard with two cruisers pulling
+    // alongside ahead of her, light bars flashing. (Cruisers behind her
+    // would sit behind the chase camera and never be seen.)
     engine.giveCar('sedan', 44, -60, 0);
     engine.addWanted(2); // steal already added 1 -> wanted 3
     engine.hero.car.speed = 14;
@@ -36,11 +37,11 @@ export function stageShot(engine, name) {
     engine.camMode = 0;
     const cruisers = engine.vehicles.cruisers;
     if (cruisers[0]) {
-      cruisers[0].x = 40; cruisers[0].z = -88; cruisers[0].heading = 0; cruisers[0].speed = 13;
+      cruisers[0].x = 36; cruisers[0].z = -45; cruisers[0].heading = 0; cruisers[0].speed = 14;
       cruisers[0].sync();
     }
     if (cruisers[1]) {
-      cruisers[1].x = 48; cruisers[1].z = -96; cruisers[1].heading = 0; cruisers[1].speed = 13;
+      cruisers[1].x = 52; cruisers[1].z = -45; cruisers[1].heading = 0; cruisers[1].speed = 14;
       cruisers[1].sync();
     }
     if (cruisers[2]) engine.vehicles.removeCruiser(cruisers[2]);
@@ -48,17 +49,18 @@ export function stageShot(engine, name) {
   }
 
   if (name === 'mission') {
-    // The finale: Lena on foot in the tower plaza, facing Vic Marino and
-    // his crew under the red beacon.
+    // The finale: Lena on foot southeast of the tower, facing Vic Marino
+    // and his crew — the tower stands off to the side, not a black wall
+    // behind them.
     const tx = city.tower.x;
     const tz = city.tower.z;
-    engine.hero.x = tx + 14;
-    engine.hero.z = tz + 14;
-    engine.hero.heading = Math.atan2(tx - engine.hero.x, tz - engine.hero.z);
+    engine.hero.x = tx + 26;
+    engine.hero.z = tz + 26;
+    engine.hero.heading = Math.atan2(tx + 10 - engine.hero.x, tz + 10 - engine.hero.z);
     engine.people.heroMesh.position.set(engine.hero.x, 0, engine.hero.z);
     engine.people.heroMesh.rotation.y = engine.hero.heading;
-    engine.people.spawnBoss(tx + 4, tz + 4);
-    engine.people.spawnThugs(tx, tz, 6);
+    engine.people.spawnBoss(tx + 10, tz + 10);
+    engine.people.spawnThugs(tx + 10, tz + 10, 6);
     engine.camMode = 0;
     return;
   }
