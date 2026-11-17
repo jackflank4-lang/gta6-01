@@ -37,15 +37,16 @@ export function stageShot(game, name) {
 
   if (name === 'chase') {
     // Wanted 3, in a sedan on the east avenue, cruisers already closing in.
-    // The cruisers are parked close behind on the same avenue so the chase
-    // reads in a still (a software renderer only advances a few frames).
+    // The chase camera sits behind the car looking north, so the cruisers
+    // are staged AHEAD of it on the same avenue (a software renderer only
+    // advances a few frames, so they must start in frame).
     game.teleport(88, 40);
     game.giveCar('sedan', 88, 38, Math.PI);
     game.playerCar.speed = 24;
     game.setWanted(3);
     game.police.cruisers.forEach((cop, i) => {
-      cop.mesh.position.set(88 + (i - 1) * 9, 0, 62 + i * 7);
-      cop.mesh.rotation.y = Math.PI;
+      cop.mesh.position.set(80 + i * 8, 0, 16 - i * 8);
+      cop.mesh.rotation.y = 0;
       cop.speed = 14;
     });
     game.camMode = 1;
@@ -57,10 +58,17 @@ export function stageShot(game, name) {
 
   if (name === 'mission') {
     // The finale: Lena on foot at the tower, Vic Marino and six thugs in
-    // front of her, the gold beacon marking the last job.
+    // front of her, the gold beacon marking the last job. The mission spawns
+    // the crew inside the tower footprint, so they are restaged into a
+    // visible line between Lena and the tower (they chase from there).
     game.startMission(4);
-    game.teleport(city.tower.x + 6, city.tower.z + 26);
+    game.teleport(city.tower.x + 6, city.tower.z + 18);
     game.hero.heading = Math.PI;
+    game.thugs.list.forEach((thug, i) => {
+      const off = thug.boss ? 0 : (i % 2 === 0 ? -1 : 1) * Math.ceil(i / 2) * 3;
+      thug.mesh.position.set(city.tower.x + off, 0, city.tower.z + 10 + (i % 3));
+      thug.mesh.rotation.y = Math.PI;
+    });
     game.camMode = 0;
     game.camYaw = 0;
     game.setWanted(2);
