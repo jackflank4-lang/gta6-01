@@ -1,8 +1,9 @@
 // Solmar Bay — rules and state: player, cars, traffic + ped AI, foot cops,
 // police + wanted, car damage, combat, the 5-mission story, neon coins,
 // economy, and save/load. No drawing here — rendering lives in render.js.
-// Rebuild r2: same story spine as v1, new systems (foot cops, damage +
-// repair, honking/overtaking traffic, coins, boss reinforcements).
+// Rebuild r3: on-foot jumping (SPACE, real gravity), a car horn (H) that
+// startles traffic ahead, toggleable headlights (L), 12 coins, a tougher
+// boss, and a Casino Royale the city now carries as a landmark.
 (function () {
   'use strict';
   window.SB = window.SB || {};
@@ -12,27 +13,27 @@
   const MISSIONS = [
     {
       name: '1 · HOT WHEELS',
-      intro: 'Mama Lou: "Dax, baby — I need wheels. Steal any car, bring it to the Chop Shop in one piece and there is a bonus in it."',
-      objective: 'Steal any car, deliver it to the Chop Shop (undamaged: +$100)',
+      intro: 'Mama Lou: "Dax — I need wheels, and I need them clean. Lift any car, bring it to the Chop Shop in one piece and there is a bonus in it for you."',
+      objective: 'Steal any car, deliver it to the Chop Shop (undamaged: +$150)',
     },
     {
       name: '2 · PAYBACK',
-      intro: 'Mama Lou: "Kingfish boys are leaning on my dock workers. Go sort them out — all three."',
+      intro: 'Mama Lou: "Kingfish boys are squeezing my dock workers again. Go remind them whose docks those are — all three of them."',
       objective: 'Deal with the Kingfish thugs at the Solmar Docks (3)',
     },
     {
       name: '3 · HEAT RUN',
-      intro: 'Mama Lou: "The PD is on you, Dax. Lose them — get to the Hideout and lay low till it blows over."',
+      intro: 'Mama Lou: "The PD is on you, Dax. Lose them — get to the Hideout and lay low till it blows over. Do not get caught."',
       objective: 'Lose the cops and reach the Hideout',
     },
     {
       name: '4 · THE DROP',
-      intro: 'Mama Lou: "Package at the Diner. Pier by sunset — 90 seconds, no excuses, no dents."',
+      intro: 'Mama Lou: "Package is waiting at the Diner. Pier by sunset — 90 seconds, no excuses, no dents in the goods."',
       objective: 'Pick up the package at the Diner, deliver it to the Pier',
     },
     {
       name: '5 · KINGFISH FALLS',
-      intro: 'Mama Lou: "Time to end this. Kingfish is at his Tower with his crew. Take them all, take the vault."',
+      intro: 'Mama Lou: "Time to end this. Kingfish is at his Tower with his whole crew. Take them all, take the vault, and Solmar Bay is ours."',
       objective: 'Take down the Kingfish crew at the Tower (6)',
     },
   ];
@@ -45,7 +46,7 @@
     cars: [], peds: [], thugs: [], footCops: [], pickups: [], coins: [],
     wanted: 0, wantedTimer: 0, bustTimer: 0, hideTimer: 0,
     missionIndex: 0, mission: null, missionTarget: null,
-    camYaw: 0, cameraMode: 0,
+    camYaw: 0, cameraMode: 0, headlights: false,
     events: [], // {kind, text, sub} consumed by main for toasts
     saveKey: 'solmarbay.save.v1',
     shootCooldown: 0, punchCooldown: 0, saveTimer: 0, lastHurt: -99,
@@ -70,7 +71,8 @@
       this.pickups = []; this.coins = [];
       const sp = this.city.places.spawn;
       this.player = {
-        x: sp.x, z: sp.z, angle: Math.PI, health: CFG.playerHealth, money: CFG.startMoney,
+        x: sp.x, z: sp.z, y: 0, vy: 0, grounded: true,
+        angle: Math.PI, health: CFG.playerHealth, money: CFG.startMoney,
         ammo: CFG.gunAmmoStart, inCar: false, carId: null, moving: false, speed: 0,
         invuln: 0,
       };
@@ -79,6 +81,7 @@
       this.camYaw = Math.PI;
       this.time = 0; this.won = false; this.freeRoam = false;
       this.bossReinforced = false; this.coinsGot = 0;
+      this.headlights = false;
       this.saveTimer = 20; // first auto-save after 20s of play, not on frame 1
       this.events = [];
       this.spawnTraffic();
@@ -129,6 +132,7 @@
       this.pickups.push({ kind: 'health', x: places.diner.x - 14, z: places.diner.z, taken: false });
       this.pickups.push({ kind: 'ammo', x: places.hideout.x + 12, z: places.hideout.z, taken: false });
       this.pickups.push({ kind: 'ammo', x: places.chopshop.x + 14, z: places.chopshop.z, taken: false });
+      this.pickups.push({ kind: 'health', x: places.casino.x - 16, z: places.casino.z, taken: false });
     },
     spawnCoins: function () {
       for (const spot of this.city.coins) {
@@ -144,7 +148,7 @@
         x: 0, z: 0, angle: 0, speed: 0, color: color,
         isPolice: !!isPolice, active: true, driver: null, parked: false,
         mesh: mesh, target: null, steer: 0,
-        damage: 0, smokeCd: 0, honkCd: 0, laneOff: 0,
+        damage: 0, smokeCd: 0, honkCd: 0, laneOff: 0, boostUntil: 0,
       };
     },
     makePed: function (isThug) {
@@ -236,8 +240,8 @@
         }
       }
       this.player.money += reward;
-      this.player.ammo += 24;
-      this.events.push({ kind: 'reward', text: 'MISSION COMPLETE', sub: '+' + '$' + reward + '  ·  +24 ammo' + bonusText });
+      this.player.ammo += 30;
+      this.events.push({ kind: 'reward', text: 'MISSION COMPLETE', sub: '+' + '$' + reward + '  ·  +30 ammo' + bonusText });
       SB.Audio.cash();
       this.save();
       const next = this.missionIndex + 1;
@@ -336,7 +340,7 @@
       this.shootCooldown = 0.28;
       SB.Audio.shoot();
       const aim = this.aimPoint();
-      const from = { x: p.x, y: 1.4, z: p.z };
+      const from = { x: p.x, y: 1.4 + (p.y || 0), z: p.z };
       const to = { x: aim.x, y: 0.4, z: aim.z };
       SB.Render.showTracer(from, to);
       p.angle = Math.atan2(aim.x - p.x, aim.z - p.z);
@@ -468,7 +472,8 @@
         if (car) { car.driver = 'parked'; car.parked = true; }
         p.inCar = false; p.carId = null;
       }
-      p.x = at.x; p.z = at.z; p.health = CFG.playerHealth; p.invuln = 2;
+      p.x = at.x; p.z = at.z; p.y = 0; p.vy = 0; p.grounded = true;
+      p.health = CFG.playerHealth; p.invuln = 2;
       this.bustTimer = 0;
       this.syncPolice();
       this.save();
@@ -499,6 +504,7 @@
       }
       car.parked = false;
       p.inCar = true; p.carId = car.id;
+      p.y = 0; p.vy = 0; p.grounded = true;
       SB.Audio.door();
       SB.Audio.engineStart();
       // foot cops give up once you are in a car
@@ -513,6 +519,7 @@
       p.inCar = false; p.carId = null;
       p.x = car.x + Math.cos(car.angle + Math.PI / 2) * 3;
       p.z = car.z + Math.sin(car.angle + Math.PI / 2) * 3;
+      p.y = 0; p.vy = 0; p.grounded = true;
       const c = H.collideCircle(this.city, p.x, p.z, CFG.playerRadius);
       p.x = c.x; p.z = c.z;
       SB.Audio.door();
@@ -521,6 +528,29 @@
     damageCar: function (car, amount) {
       if (!car || car.isPolice) return;
       car.damage = Math.min(CFG.carMaxDamage, car.damage + amount);
+    },
+    // ---------- horn ----------
+    honkHorn: function () {
+      const p = this.player;
+      const car = this.cars.find((c) => c.id === p.carId);
+      if (!car) return;
+      SB.Audio.horn();
+      // traffic ahead of the player speeds up; nearby peds jump aside
+      const fx = Math.sin(car.angle), fz = Math.cos(car.angle);
+      for (const o of this.cars) {
+        if (o === car || !o.active || o.driver !== 'traffic') continue;
+        const dx = o.x - car.x, dz = o.z - car.z;
+        const d = Math.sqrt(dx * dx + dz * dz);
+        const ahead = (dx * fx + dz * fz) / Math.max(0.001, d);
+        if (d < CFG.hornRange && ahead > 0.5) o.boostUntil = this.time + 2;
+      }
+      this.scarePeds(p.x, p.z, 20);
+    },
+    toggleHeadlights: function () {
+      this.headlights = !this.headlights;
+      SB.Render.setHeadlights(this.headlights);
+      SB.Audio.headlight();
+      return this.headlights;
     },
     // ---------- per-frame update ----------
     update: function (dt, input) {
@@ -572,6 +602,17 @@
         const cl = H.clampCity(p.x, p.z, 0);
         p.x = cl.x; p.z = cl.z;
         this.camYaw = p.angle; // camera trails behind the run direction
+      }
+      // jump: SPACE while grounded, real gravity while airborne
+      if (input.wasPressed('Space') && p.grounded) {
+        p.vy = CFG.jumpSpeed;
+        p.grounded = false;
+        SB.Audio.jump();
+      }
+      if (!p.grounded) {
+        p.vy -= CFG.gravity * dt;
+        p.y += p.vy * dt;
+        if (p.y <= 0) { p.y = 0; p.vy = 0; p.grounded = true; }
       }
       // enter car
       if (input.wasPressed('KeyE')) {
@@ -675,6 +716,8 @@
           }
         }
       }
+      // horn: H while driving (away from the shop it is just a honk)
+      if (input.wasPressed('KeyH')) this.honkHorn();
       // sync player to car
       p.x = car.x; p.z = car.z; p.angle = car.angle; p.speed = car.speed;
       p.moving = Math.abs(car.speed) > 0.5;
@@ -721,7 +764,9 @@
           car.laneOff *= Math.max(0, 1 - dt * 2);
           if (Math.abs(car.laneOff) < 0.2) car.laneOff = 0;
         }
-        const targetSpeed = slow ? 0 : CFG.trafficSpeed;
+        // a horned car speeds up for a couple of seconds
+        let targetSpeed = slow ? 0 : CFG.trafficSpeed;
+        if (car.boostUntil > this.time) targetSpeed = CFG.trafficSpeed + 8;
         car.speed += (targetSpeed - car.speed) * Math.min(1, dt * 1.5);
         // lane offset is perpendicular to the heading
         const px = Math.cos(car.angle) * car.laneOff, pz = -Math.sin(car.angle) * car.laneOff;
@@ -921,7 +966,7 @@
         if (H.dist(p.x, p.z, pk.x, pk.z) < 3) {
           pk.taken = true;
           if (pk.kind === 'health') { p.health = Math.min(CFG.playerHealth, p.health + 50); this.events.push({ kind: 'info', text: '+50 HEALTH', sub: 'Patched up.' }); }
-          else { p.ammo += 24; this.events.push({ kind: 'info', text: '+24 AMMO', sub: 'Locked and loaded.' }); }
+          else { p.ammo += 30; this.events.push({ kind: 'info', text: '+30 AMMO', sub: 'Locked and loaded.' }); }
           SB.Audio.pickup();
         }
       }
@@ -1001,7 +1046,7 @@
           missionIndex: this.missionIndex, x: Math.round(p.x), z: Math.round(p.z),
           won: this.won, coinsGot: this.coinsGot,
           coinsTaken: this.coins.map((c, i) => (c.taken ? i : -1)).filter((i) => i >= 0),
-          cameraMode: this.cameraMode, savedAt: Date.now(),
+          cameraMode: this.cameraMode, headlights: this.headlights, savedAt: Date.now(),
         };
         localStorage.setItem(this.saveKey, JSON.stringify(data));
       } catch (e) { /* storage unavailable (file:// in some builds) */ }
@@ -1028,6 +1073,10 @@
       if (typeof data.cameraMode === 'number') {
         this.cameraMode = data.cameraMode;
         SB.Render.setCameraMode(data.cameraMode);
+      }
+      if (data.headlights) {
+        this.headlights = true;
+        SB.Render.setHeadlights(true);
       }
       // jump missions forward to the saved one
       this.thugs.forEach((t) => SB.Render.removeMesh(t.mesh));
