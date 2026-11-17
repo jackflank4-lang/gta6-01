@@ -1,35 +1,41 @@
-// Solmar Bay — Neon Heat: bootstrap. Creates the game, collects every error
-// the page reports (the test driver reads window.__errors), and stages a
-// screenshot scene when the URL asks for one (?shot=start|drive|chase|mission).
-// With no query, the title menu opens and the player starts from there.
-
+// Solmar Bay bootstrap: collect page errors for the test driver, build
+// the game, and apply screenshot staging when asked (?shot=start|drive|
+// chase|mission). The game object is exposed as window.__game with the
+// debug API the driver uses.
 import { Game } from './engine.js';
 import { stageShot } from './shots.js';
 
 window.__errors = [];
 window.__shotReady = false;
-
-window.addEventListener('error', (event) => {
-  window.__errors.push(`error: ${event.message} @ ${event.filename}:${event.lineno}`);
+window.addEventListener('error', (e) => {
+  window.__errors.push(`ERROR: ${e.message} @ ${e.filename}:${e.lineno}`);
 });
-window.addEventListener('unhandledrejection', (event) => {
-  window.__errors.push(`rejection: ${event.reason}`);
+window.addEventListener('unhandledrejection', (e) => {
+  window.__errors.push(`REJECTION: ${String(e.reason).slice(0, 200)}`);
 });
-const nativeConsoleError = console.error.bind(console);
-console.error = (...args) => {
-  window.__errors.push(`console.error: ${args.map(String).join(' ')}`);
-  nativeConsoleError(...args);
-};
 
-const game = new Game();
+const params = new URLSearchParams(location.search);
+const lowFx = params.get('fx') === 'low';
+const canvas = document.getElementById('game-canvas');
+const game = new Game(canvas, { lowFx });
 window.__game = game;
 
-const params = new URLSearchParams(window.location.search);
 const shot = params.get('shot');
 if (shot) {
-  stageShot(game, shot);
-} else {
-  game.hud.showStart(game.hasSave());
+  try {
+    stageShot(game, shot);
+  } catch (err) {
+    window.__errors.push(`STAGE-ERROR: ${String(err).slice(0, 200)}`);
+  }
+  // Let a few frames render before the driver captures.
+  let frames = 0;
+  const tick = () => {
+    frames += 1;
+    if (frames >= 45) {
+      window.__shotReady = true;
+      return;
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
-
-game.loop();

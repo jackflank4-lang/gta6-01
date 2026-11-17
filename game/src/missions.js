@@ -1,230 +1,217 @@
-// The story of Solmar Bay: Lena Cruz, a driver fresh out of the county lockup,
-// owes the Barracudas nothing and wants everything. Five missions take her from
-// a stolen sedan to the top of the Meridian Tower, where Vic Marino waits.
-// The director is a small state machine: each mission is a list of stages, and
-// a stage is done when the player reaches its beacon, steals a car, or takes
-// down the thugs it names. The engine reads the current objective and beacon
-// every frame for the HUD and the minimap.
+// The five story missions of Solmar Bay, in order: steal and deliver a
+// car, a timed delivery, a plaza brawl, three taxi fares, and the boss
+// finale. The manager reads the world each frame (hero position, car,
+// living thugs) and drives the mission forward, paying out on completion.
+// The world object is the Game; it provides the scene, the city layout,
+// beacons, toasts, cash and car/thug spawning.
+import { makePersonMesh } from './people.js';
+import { Rng } from './rng.js';
 
-const MISSION_PAY = [350, 550, 450, 750, 5000];
+export const MISSIONS = [
+  { name: 'Hot Wheels', payout: 350 },
+  { name: 'Pelican Special', payout: 550 },
+  { name: 'Plaza Brawl', payout: 450 },
+  { name: 'Night Shift', payout: 750 },
+  { name: 'Kingfish Down', payout: 5000 },
+];
 
-export class Missions {
+export class MissionManager {
   constructor(world) {
     this.world = world;
     this.index = 0;
     this.stage = 0;
     this.timer = 0;
-    this.done = false;
-    this.allDone = false;
-    this.killTarget = 0;
-    this.killCount = 0;
-    this.undamagedBonus = 0;
-    this.fares = [];
-    this.fareIndex = 0;
+    this.fare = 0;
+    this.farePed = null;
+    this.fareDest = null;
+    this.rng = new Rng(2026);
+    this.started = false;
   }
 
-  get current() {
-    return MISSIONS[this.index];
+  get done() {
+    return this.index >= MISSIONS.length;
   }
 
-  get title() {
-    return this.allDone ? 'FREE ROAM' : MISSIONS[this.index].title;
+  name() {
+    return this.done ? 'Story complete' : MISSIONS[this.index].name;
+  }
+
+  objective() {
+    if (this.done) return 'Free roam — Solmar Bay is yours, Lena.';
+    const w = this.world;
+    switch (this.index) {
+      case 0:
+        return this.stage === 0
+          ? 'Steal a car (walk up to a parked car and press E)'
+          : 'Deliver the car to Rosa\'s Garage — undamaged pays a bonus';
+      case 1:
+        return `Deliver the package car to the Pelican Diner — ${Math.ceil(this.timer)}s left`;
+      case 2:
+        return `Clear the plaza: ${w.thugsAlive()} thugs left`;
+      case 3:
+        return this.farePed
+          ? `Fare ${this.fare + 1}/3: pick up the passenger (drive close)`
+          : `Fare ${this.fare + 1}/3: drop the passenger at the marker`;
+      case 4:
+        return 'Take down Vic Marino and his crew at Meridian Tower';
+      default:
+        return '';
+    }
   }
 
   start() {
-    this.index = 0;
+    this.started = true;
     this.stage = 0;
-    this.done = false;
-    this.allDone = false;
-    this.enterStage();
+    this.timer = 0;
+    this.fare = 0;
+    this.clearFarePed();
+    const w = this.world;
+    if (this.index === 0) {
+      w.toast('Mission: Hot Wheels — steal a car');
+      w.clearBeacon();
+    } else if (this.index === 1) {
+      w.spawnMissionCar('sedan', w.city.hideout.x + 6, w.city.hideout.z);
+      this.timer = 75;
+      w.setBeacon(w.city.diner.x, w.city.diner.z, 0x7ae0ff);
+      w.toast('Mission: Pelican Special — 75 seconds, do not be late');
+    } else if (this.index === 2) {
+      const p = w.city.plaza;
+      w.spawnThugs([
+        { x: p.x - 6, z: p.z - 4 },
+        { x: p.x + 6, z: p.z - 4 },
+        { x: p.x - 6, z: p.z + 5 },
+        { x: p.x + 6, z: p.z + 5 },
+      ]);
+      w.setBeacon(p.x, p.z, 0xff5a5a);
+      w.toast('Mission: Plaza Brawl — clear the plaza');
+    } else if (this.index === 3) {
+      this.nextFare();
+      w.toast('Mission: Night Shift — three fares, good tips');
+    } else if (this.index === 4) {
+      const t = w.city.tower;
+      w.spawnThugs([
+        { x: t.x, z: t.z + 18, boss: true, name: 'Vic Marino' },
+        { x: t.x - 8, z: t.z + 14 },
+        { x: t.x + 8, z: t.z + 14 },
+        { x: t.x - 12, z: t.z + 20 },
+        { x: t.x + 12, z: t.z + 20 },
+        { x: t.x - 4, z: t.z + 24 },
+        { x: t.x + 4, z: t.z + 24 },
+      ]);
+      w.setBeacon(t.x, t.z + 18, 0xff2a2a);
+      w.toast('Mission: Kingfish Down — end Vic Marino');
+    }
   }
 
-  enterStage() {
-    const mission = MISSIONS[this.index];
-    const stage = mission.stages[this.stage];
-    this.timer = stage.time || 0;
-    if (stage.spawnThugs) {
-      this.killTarget = stage.spawnThugs.count;
-      this.killCount = 0;
-      this.world.spawnThugs(stage.spawnThugs.at, stage.spawnThugs.count, stage.spawnThugs.boss);
-    }
-    if (stage.fares) {
-      this.fares = stage.fares;
-      this.fareIndex = 0;
-    }
-    if (stage.kind === 'steal') this.undamagedBonus = 0;
+  nextFare() {
+    const w = this.world;
+    this.clearFarePed();
+    const spots = [
+      { x: -88, z: 44 }, { x: 88, z: -44 }, { x: 0, z: 132 },
+      { x: -132, z: -88 }, { x: 132, z: 88 }, { x: 44, z: -132 },
+    ];
+    const pick = spots[this.rng.int(0, spots.length - 1)];
+    const mesh = makePersonMesh(0xffd27a, { skin: 0xd8a878 });
+    mesh.position.set(pick.x, 0, pick.z);
+    w.scene.add(mesh);
+    this.farePed = { mesh, x: pick.x, z: pick.z };
+    const dests = [
+      { x: w.city.casino.x, z: w.city.casino.z },
+      { x: w.city.diner.x, z: w.city.diner.z },
+      { x: w.city.beach.x, z: w.city.beach.z },
+      { x: w.city.park.x, z: w.city.park.z },
+    ];
+    this.fareDest = dests[this.rng.int(0, dests.length - 1)];
+    w.setBeacon(pick.x, pick.z, 0xffd27a);
   }
 
-  objectiveText() {
-    if (this.allDone) return 'Story complete — Solmar Bay is yours. Free roam, collect coins, cause chaos.';
-    const stage = MISSIONS[this.index].stages[this.stage];
-    if (stage.kind === 'fare') {
-      const fare = this.fares[this.fareIndex];
-      return fare.picked
-        ? `Drop ${fare.name} off at ${fare.toName} — $${fare.pay}`
-        : `Pick up ${fare.name} at ${fare.fromName}`;
+  clearFarePed() {
+    if (this.farePed) {
+      this.world.scene.remove(this.farePed.mesh);
+      this.farePed = null;
     }
-    if (stage.kind === 'kill') {
-      return `${stage.text} — ${this.killCount}/${this.killTarget} down`;
-    }
-    if (this.timer > 0) return `${stage.text} — ${Math.ceil(this.timer)}s left`;
-    return stage.text;
   }
 
-  beaconPos() {
-    if (this.allDone) return null;
-    const stage = MISSIONS[this.index].stages[this.stage];
-    if (stage.kind === 'fare') {
-      const fare = this.fares[this.fareIndex];
-      return fare.picked ? fare.to : fare.from;
-    }
-    if (stage.kind === 'kill') return stage.at;
-    return stage.at || null;
+  reset() {
+    this.clearFarePed();
+    this.world.clearThugs();
+    this.world.clearBeacon();
+    this.started = false;
+    this.start();
   }
 
-  onKill() {
-    this.killCount += 1;
-  }
-
-  onSteal() {
-    const stage = MISSIONS[this.index].stages[this.stage];
-    if (stage && stage.kind === 'steal') this.advance();
+  complete(payout, note) {
+    const w = this.world;
+    w.addCash(payout);
+    w.clearBeacon();
+    w.clearThugs();
+    this.clearFarePed();
+    const paid = payout > 0 ? ` — $${payout}` : '';
+    w.toast(`Mission complete: ${MISSIONS[this.index].name}${paid}${note ? ` (${note})` : ''}`);
+    w.onMissionComplete(this.index);
+    this.index += 1;
+    this.started = false;
+    if (!this.done) this.start();
+    else w.toast('Story complete — Solmar Bay is yours!');
   }
 
   update(dt) {
-    if (this.allDone || this.done) return;
-    const mission = MISSIONS[this.index];
-    const stage = mission.stages[this.stage];
-    if (this.timer > 0) {
-      this.timer -= dt;
-      if (this.timer <= 0) {
-        // Timed stages fail soft: back to the mission's first stage, no fine.
-        this.world.toast('Too slow — try that one again');
-        this.stage = 0;
-        this.enterStage();
-        return;
-      }
-    }
-    if (stage.kind === 'kill') {
-      if (this.killCount >= this.killTarget) this.advance();
-      return;
-    }
-    if (stage.kind === 'steal') return; // advanced by onSteal()
-    if (stage.kind === 'fare') {
-      const fare = this.fares[this.fareIndex];
-      const target = fare.picked ? fare.to : fare.from;
-      const pos = this.world.playerFootPos();
-      const d = Math.hypot(target.x - pos.x, target.z - pos.z);
-      if (d < (stage.radius || 8)) {
-        if (!fare.picked) {
-          fare.picked = true;
-          this.world.toast(`${fare.name} is in — drive them to ${fare.toName}`);
-          this.world.sound.pickup();
-        } else {
-          this.world.addCash(fare.pay);
-          this.world.toast(`Fare complete — +$${fare.pay}`);
-          this.world.sound.coin();
-          this.fareIndex += 1;
-          if (this.fareIndex >= this.fares.length) this.advance();
+    if (!this.started || this.done) return;
+    const w = this.world;
+    const hero = w.heroPos();
+    const car = w.playerCar();
+    if (this.index === 0) {
+      if (this.stage === 0 && car) {
+        this.stage = 1;
+        w.setBeacon(w.city.garage.x, w.city.garage.z, 0xffd27a);
+        w.toast('Now deliver it to Rosa\'s Garage');
+      } else if (this.stage === 1 && car) {
+        const g = w.city.garage;
+        const d = Math.hypot(car.mesh.position.x - g.x, car.mesh.position.z - g.z);
+        if (d < 11) {
+          const undamaged = car.damage <= 0;
+          this.complete(350 + (undamaged ? 150 : 0), undamaged ? 'undamaged bonus' : 'car was damaged');
         }
       }
-      return;
-    }
-    // Plain reach stage: arrive at the beacon.
-    const pos = this.world.playerFootPos();
-    const d = Math.hypot(stage.at.x - pos.x, stage.at.z - pos.z);
-    if (d < (stage.radius || 9)) this.advance();
-  }
-
-  advance() {
-    const mission = MISSIONS[this.index];
-    this.stage += 1;
-    if (this.stage >= mission.stages.length) {
-      // Mission complete: pay out, with an undamaged bonus on the first job.
-      let pay = MISSION_PAY[this.index];
-      if (this.index === 0 && this.world.carDamage() <= 20) {
-        pay += 150;
-        this.world.toast('Undamaged delivery — +$150 bonus');
-      }
-      this.world.addCash(pay);
-      this.world.sound.missionDone();
-      this.world.toast(`${mission.title} complete — +$${pay}`);
-      this.index += 1;
-      this.stage = 0;
-      if (this.index >= MISSIONS.length) {
-        this.allDone = true;
-        this.world.toast('STORY COMPLETE — Lena Cruz owns Solmar Bay');
+    } else if (this.index === 1) {
+      this.timer -= dt;
+      if (this.timer <= 0) {
+        w.toast('Too slow — the package went cold. Try again.');
+        this.reset();
         return;
       }
-      this.world.toast(`New mission: ${MISSIONS[this.index].title}`);
-      this.enterStage();
-      return;
+      if (car) {
+        const d = w.city.diner;
+        const dist = Math.hypot(car.mesh.position.x - d.x, car.mesh.position.z - d.z);
+        if (dist < 11) this.complete(550);
+      }
+    } else if (this.index === 2) {
+      if (w.thugsAlive() === 0) this.complete(450);
+    } else if (this.index === 3) {
+      if (this.farePed) {
+        const d = Math.hypot(hero.x - this.farePed.x, hero.z - this.farePed.z);
+        if (car && d < 5) {
+          w.scene.remove(this.farePed.mesh);
+          this.farePed = null;
+          w.setBeacon(this.fareDest.x, this.fareDest.z, 0x7ae0ff);
+          w.toast('Passenger aboard — take them to the marker');
+        }
+      } else if (car) {
+        const d = Math.hypot(car.mesh.position.x - this.fareDest.x, car.mesh.position.z - this.fareDest.z);
+        if (d < 7) {
+          w.addCash(250);
+          w.toast(`Fare done — $250 (fare ${this.fare + 1}/3)`);
+          this.fare += 1;
+          if (this.fare >= 3) {
+            this.complete(0, 'all fares done');
+          } else {
+            this.nextFare();
+          }
+        }
+      }
+    } else if (this.index === 4) {
+      const boss = w.findBoss();
+      if (boss && boss.down) this.complete(5000);
     }
-    this.enterStage();
   }
-}
-
-// The five jobs. Positions are filled in by the engine at boot, once the
-// city exists — see bindPlaces() below.
-const MISSIONS = [
-  {
-    title: 'Grand Theft, Baby',
-    stages: [
-      { kind: 'steal', text: 'Steal any car — walk up to one and press E' },
-      { kind: 'reach', text: 'Deliver the car to Rosa\'s Garage', at: null, radius: 10 },
-    ],
-  },
-  {
-    title: 'Pelican Special',
-    stages: [
-      { kind: 'reach', text: 'Pick up the package at the Pelican Diner', at: null, radius: 8 },
-      { kind: 'reach', text: 'Deliver it to the Marina dock — fast', at: null, radius: 9, time: 75 },
-    ],
-  },
-  {
-    title: 'Vipers in the Plaza',
-    stages: [
-      { kind: 'kill', text: 'Take down the Barracuda thugs in the plaza', at: null, spawnThugs: { count: 4, boss: false } },
-    ],
-  },
-  {
-    title: 'Night Fare',
-    stages: [
-      {
-        kind: 'fare', text: 'Night fares — pick up and drop off',
-        fares: [
-          { name: 'Milo', fromName: 'the hotel', toName: 'the Luna Casino', from: null, to: null, pay: 250 },
-          { name: 'Ada', fromName: 'the casino', toName: 'the Meridian Tower', from: null, to: null, pay: 250 },
-          { name: 'Rosa', fromName: 'the tower', toName: 'the marina', from: null, to: null, pay: 250 },
-        ],
-      },
-    ],
-  },
-  {
-    title: 'King of the Bay',
-    stages: [
-      { kind: 'kill', text: 'Take down Vic Marino and his crew at the tower', at: null, spawnThugs: { count: 7, boss: true } },
-      { kind: 'reach', text: 'Escape to the hideout — it is over', at: null, radius: 10 },
-    ],
-  },
-];
-
-// Fill the null positions from the city's named places. Called once by the
-// engine after the city is built.
-export function bindPlaces(missions, city) {
-  const at = (place) => ({ x: place.x, z: place.z });
-  MISSIONS[0].stages[1].at = at(city.garage);
-  MISSIONS[1].stages[0].at = at(city.diner);
-  MISSIONS[1].stages[1].at = at(city.marina);
-  MISSIONS[2].stages[0].at = at(city.plaza);
-  MISSIONS[2].stages[0].spawnThugs.at = at(city.plaza);
-  MISSIONS[3].stages[0].fares[0].from = at(city.diner);
-  MISSIONS[3].stages[0].fares[0].to = at(city.casino);
-  MISSIONS[3].stages[0].fares[1].from = at(city.casino);
-  MISSIONS[3].stages[0].fares[1].to = at(city.tower);
-  MISSIONS[3].stages[0].fares[2].from = at(city.tower);
-  MISSIONS[3].stages[0].fares[2].to = at(city.marina);
-  MISSIONS[4].stages[0].at = at(city.tower);
-  MISSIONS[4].stages[0].spawnThugs.at = at(city.tower);
-  MISSIONS[4].stages[1].at = at(city.hideout);
 }

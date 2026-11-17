@@ -1,68 +1,64 @@
 # Solmar Bay — Neon Heat
 
-An open-world crime game in the spirit of GTA 6, built from scratch for the
-make.fun **gta6-01** bounty. It plays offline in a desktop browser from static
-files — no network, no build step, every sound synthesised live with WebAudio.
+An open-world crime game in the fictional coastal city of Solmar Bay.
+You are Lena Cruz, running with the Barracuda crew against the crime
+boss Vic Marino. Explore the city on foot and by car, steal cars, outrun
+the police, and run five story missions — from a hot-wired sedan to the
+Kingfish himself.
 
-## The game
+## How to play
 
-Lena Cruz is out of the county lockup with $200 and a grudge. Solmar Bay is
-hers to take: a dusk-lit procedural city on a bay, 8×8 blocks of streets,
-traffic, pedestrians, a marina, a beach, the Meridian Tower and the Luna
-Casino glowing over the east side.
-
-**Systems, all wired together:**
-
-- **On foot and by car** — walk the sidewalks, sprint, jump; steal any
-  parked or traffic car with E and drive it. Arcade handling with
-  acceleration, braking, handbrake drift and damage.
-- **Traffic AI** — 14 cars looping the blocks, stopping at red lights,
-  slowing for the car ahead; 10 parked cars waiting to be stolen.
-- **Pedestrians** — 22 walkers strolling the sidewalks who scatter when a car
-  screams past or a punch lands.
-- **Wanted system** — 0–5 stars for stealing, hitting civilians or cops.
-  Cruisers spawn, chase and ram; foot cops try to hold you and bust you.
-  Lay low out of sight and the heat cools off.
-- **Story missions** — five jobs with payouts and an undamaged-delivery
-  bonus: steal a car for Rosa's Garage, a timed courier run to the marina,
-  a plaza brawl with the Barracudas, three night fares, and the finale
-  against boss Vic Marino on top of the Meridian Tower.
-- **Combat** — punch thugs and cops; thugs fight back, the boss hits harder.
-- **HUD** — cash, health, wanted stars, clock, speed, a circular minimap
-  (roads, traffic, police, mission beacon), objectives and toasts.
-- **Extras** — 12 gold coins to collect, three radio stations, headlights,
-  horn, three camera modes, day clock, and a save that persists in
-  localStorage (autosaves every 30 s, on pause and on mission complete).
-
-## Controls
+Open `game/index.html` in desktop Chrome (or run `node serve.ts` and
+open http://localhost:8080). No network needed — everything is local.
 
 | Key | Action |
 | --- | --- |
-| W A S D / arrows | Walk / drive |
-| Mouse drag | Look around |
-| E | Steal car / exit car |
-| Space | Jump (on foot) / handbrake (in car) |
-| F | Punch |
-| H | Horn |
+| WASD / arrows | Move on foot, drive in a car |
+| Shift | Sprint |
+| Space | Jump |
+| E | Steal a parked car / exit a car |
+| F or mouse click | Punch |
+| H | Car horn |
 | L | Headlights |
-| N | Next radio station |
-| C | Camera mode |
-| P / Esc | Pause |
-| M | Mute |
+| N | Change radio station (3 stations) |
+| C | Change camera (chase / far / high) |
+| P or Esc | Pause (progress autosaves) |
+| Drag mouse | Look around |
 
-## Play
+## The city
 
-Serve `game/` with any static server and open `game/index.html`, or run
-`node serve.ts` and open http://localhost:8080. Screenshots are staged with
-`?shot=start|drive|chase|mission`.
+An 8×8 block grid with a beach and marina to the south, a park, a
+plaza with a fountain, and five landmarks: Meridian Tower (92 m, with
+a beacon), Luna Casino, Rosa's Garage, the Pelican Diner, and the crew
+hideout. Traffic drives the roads and stops at red lights; pedestrians
+stroll the sidewalks and flee from trouble.
+
+## Missions
+
+1. **Hot Wheels** — steal a car and deliver it to Rosa's Garage.
+   Deliver it undamaged for a $150 bonus.
+2. **Pelican Special** — a timed delivery to the Pelican Diner.
+3. **Plaza Brawl** — clear four thugs out of the plaza.
+4. **Night Shift** — three taxi fares across the city.
+5. **Kingfish Down** — take down Vic Marino (300 HP) and his crew at
+   Meridian Tower.
+
+Plus 12 neon coins hidden around the city ($40 each), a wanted system
+(0–5 stars) with police cruisers and foot cops, car damage and repairs
+at Rosa's Garage, and a save system (autosaves every 30 seconds and on
+pause; Continue on the title screen picks up where you left off).
+
+## Tips
+
+- Stealing a car raises your wanted level; lose the police by breaking
+  line of sight for a while and the stars decay.
+- A wrecked car cannot drive — get it to Rosa's Garage or steal another.
+- The radio only plays while you are driving. Headlights help at dusk.
+- Punch thugs before they surround you; each one you drop pays $50.
 
 ## Tech
 
-- three.js (vendored UMD build under `game/vendor/`) for the 3D city
-- ES modules under `game/src/`, one file per system
-- `main.ts` (Node 22, stdlib only) copies `game/` and `screenshots/` to
-  `/output` and writes `dossier.json` with the vendored make.fun library
-
-## License
-
-MIT — see LICENSE.
+Three.js (vendored) renders the city; all sound is synthesised with
+WebAudio (engine, sirens, horn, crashes, and three original radio
+tracks). The city, traffic and pedestrians are built from one seed
+(777), so every run plays the same streets.

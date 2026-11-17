@@ -5,121 +5,87 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Solmar Bay — Neon Heat</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #1c1420;
-    font-family: "Segoe UI", system-ui, sans-serif; color: #fff; }
-  #app, #app canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
-  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .panel { position: fixed; z-index: 5; pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
-  #topleft { top: 14px; left: 16px; font-size: 20px; }
-  #cash { font-weight: 800; color: #7dff8a; font-size: 26px; letter-spacing: .5px; }
-  #health { margin-top: 6px; display: flex; align-items: center; gap: 8px; font-size: 14px; }
-  #health-bar { width: 150px; height: 12px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.5); border-radius: 6px; overflow: hidden; }
-  #health-fill { height: 100%; width: 100%; background: #3ddc5f; }
-  #topright { top: 14px; right: 16px; text-align: right; }
-  #stars { font-size: 26px; letter-spacing: 3px; color: #ffd23b; }
-  #clock { font-size: 20px; font-weight: 700; }
-  #radio-name { font-size: 13px; color: #8ae0ff; margin-top: 2px; }
-  #minimap-wrap { position: fixed; left: 16px; bottom: 16px; z-index: 5; }
-  #minimap { width: 176px; height: 176px; border-radius: 50%; border: 2px solid rgba(255,255,255,.65);
-    background: #16222e; box-shadow: 0 0 0 4px rgba(0,0,0,.35); }
-  #bottombar { left: 50%; transform: translateX(-50%); bottom: 16px; text-align: center; width: min(720px, 90vw); }
-  #mission-title { font-size: 13px; letter-spacing: 2px; color: #ffd23b; font-weight: 800; }
-  #objective { font-size: 17px; margin-top: 2px; }
-  #speed { position: fixed; right: 18px; bottom: 18px; z-index: 5; font-size: 26px; font-weight: 800;
-    text-shadow: 0 1px 3px rgba(0,0,0,.8); }
-  #controls-hint { position: fixed; right: 18px; bottom: 52px; z-index: 5; font-size: 12px; color: rgba(255,255,255,.75);
-    text-align: right; line-height: 1.5; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
-  #toast { position: fixed; left: 50%; top: 84px; transform: translateX(-50%); z-index: 6; font-size: 22px;
-    font-weight: 700; background: rgba(0,0,0,.55); padding: 8px 18px; border-radius: 8px; opacity: 0;
-    transition: opacity .3s; pointer-events: none; white-space: nowrap; }
-  .overlay { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center;
-    background: linear-gradient(160deg, rgba(20,8,28,.88), rgba(60,16,48,.82)); }
-  .card { text-align: center; max-width: 640px; padding: 28px 36px; }
-  .card h1 { margin: 0; font-size: 52px; letter-spacing: 2px; color: #ff5ea8;
-    text-shadow: 0 0 24px rgba(255,94,168,.6), 0 2px 0 #40102a; }
-  .card h2 { margin: 4px 0 0; font-size: 18px; letter-spacing: 6px; color: #37e0c8; font-weight: 700; }
-  .card p { font-size: 15px; line-height: 1.55; color: #f0e8f0; }
-  .keys { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; text-align: left; font-size: 13.5px;
-    margin: 14px auto; max-width: 480px; }
-  .keys b { color: #ffd23b; }
-  .btn { pointer-events: auto; cursor: pointer; border: none; border-radius: 8px; padding: 12px 26px;
-    font-size: 17px; font-weight: 800; letter-spacing: 1px; color: #1c1420; background: #ffd23b; margin: 6px 4px 0; }
-  .btn:hover { background: #ffe98a; }
-  .btn.ghost { background: transparent; color: #fff; border: 2px solid rgba(255,255,255,.6); }
-  .btn.ghost:hover { border-color: #fff; }
-  #save-note { font-size: 13px; color: #c9b8cc; }
-  .big { font-size: 44px; font-weight: 900; letter-spacing: 3px; }
-  .red { color: #ff5555; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #14101f; font-family: 'Segoe UI', Arial, sans-serif; }
+  #game-canvas { display: block; width: 100vw; height: 100vh; }
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; color: #fff; }
+  #hud-top { position: absolute; top: 12px; left: 14px; right: 14px; display: flex; justify-content: space-between; align-items: flex-start; text-shadow: 0 2px 4px #000; }
+  #hud-cash { font-size: 30px; font-weight: 800; color: #7dff8a; }
+  #hud-right { text-align: right; }
+  #hud-clock { font-size: 24px; font-weight: 700; }
+  #hud-stars { font-size: 22px; letter-spacing: 2px; }
+  #hud-speed { font-size: 20px; font-weight: 700; color: #ffd27a; }
+  #hud-hp-wrap { width: 220px; height: 14px; background: rgba(0,0,0,.55); border: 1px solid #fff3; margin-top: 6px; }
+  #hud-hp-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #37d67a, #a8e063); }
+  #hud-objective { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); max-width: 46vw; text-align: center; font-size: 17px; font-weight: 600; background: rgba(0,0,0,.55); padding: 8px 16px; border-radius: 8px; }
+  #hud-damage { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); font-size: 15px; font-weight: 700; color: #ff7a5a; text-shadow: 0 2px 4px #000; }
+  #hud-radio { position: absolute; top: 92px; left: 50%; transform: translateX(-50%); font-size: 14px; color: #ffd27a; text-shadow: 0 2px 4px #000; }
+  #minimap { position: absolute; right: 16px; bottom: 16px; width: 180px; height: 180px; border-radius: 50%; border: 3px solid rgba(255,255,255,.75); background: #1c2b33; box-shadow: 0 0 0 4px rgba(0,0,0,.4); }
+  #hud-toast { position: absolute; left: 16px; bottom: 18px; font-size: 16px; font-weight: 600; text-shadow: 0 2px 4px #000; }
+  #hud-toast div { background: rgba(0,0,0,.55); padding: 6px 12px; border-radius: 6px; margin-top: 6px; width: max-content; max-width: 420px; }
+  #hud-banner { position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%); font-size: 44px; font-weight: 900; letter-spacing: 4px; color: #ffd27a; text-shadow: 0 3px 10px #000; opacity: 0; transition: opacity .4s; }
+  .menu { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; background: linear-gradient(180deg, rgba(20,8,40,.55), rgba(10,4,24,.82)); color: #fff; text-align: center; z-index: 5; }
+  .menu h1 { font-size: 64px; margin: 0; letter-spacing: 3px; color: #ff5a8a; text-shadow: 0 0 24px #ff2a6a, 0 4px 0 #000; }
+  .menu h2 { font-size: 20px; font-weight: 400; color: #ffd27a; margin: 8px 0 26px; letter-spacing: 2px; }
+  .menu p { max-width: 560px; font-size: 16px; line-height: 1.5; color: #ddd; }
+  .menu button { pointer-events: auto; font-size: 20px; font-weight: 700; padding: 12px 34px; margin: 8px; border: none; border-radius: 8px; cursor: pointer; background: #ff2a6a; color: #fff; box-shadow: 0 4px 0 #a31347; }
+  .menu button.secondary { background: #2a4a6a; box-shadow: 0 4px 0 #12283e; }
+  .menu button:hover { filter: brightness(1.15); }
+  #save-note { font-size: 14px; color: #9fd8ff; margin-top: 10px; }
+  #dead-title { font-size: 72px; color: #ff3333; }
+  .keys { font-size: 14px; color: #bbb; margin-top: 18px; line-height: 1.7; }
 </style>
 </head>
 <body>
-<div id="app"></div>
-<p id="status" role="status" aria-live="polite"></p>
+<canvas id="game-canvas"></canvas>
 
-<div class="panel" id="topleft">
-  <div id="cash">$200</div>
-  <div id="health"><span>HP <span id="health-num">100</span></span><div id="health-bar"><div id="health-fill"></div></div></div>
-</div>
-<div class="panel" id="topright">
-  <div id="stars">☆☆☆☆☆</div>
-  <div id="clock">15:00</div>
-  <div id="radio-name"></div>
-</div>
-<div id="minimap-wrap"><canvas id="minimap" width="176" height="176"></canvas></div>
-<div class="panel" id="bottombar">
-  <div id="mission-title">SOLMAR BAY</div>
-  <div id="objective">Welcome to Solmar Bay.</div>
-</div>
-<div id="speed"></div>
-<div id="controls-hint">WASD move/drive · E steal car · F punch · Space jump/handbrake<br>H horn · L headlights · N radio · C camera · P pause · M mute</div>
-<div id="toast"></div>
-
-<div class="overlay" id="menu">
-  <div class="card">
-    <h1>SOLMAR BAY</h1>
-    <h2>NEON HEAT</h2>
-    <p>Lena Cruz is out of the county lockup with $200, a grudge, and the whole
-    bay to take. Steal cars, outrun the Solmar Bay PD, run five jobs for the
-    crew that crossed her — and finish it on top of the Meridian Tower with
-    Vic Marino himself.</p>
-    <div class="keys">
-      <div><b>W A S D</b> — walk / drive</div><div><b>Mouse drag</b> — look around</div>
-      <div><b>E</b> — steal / exit car</div><div><b>Space</b> — jump / handbrake</div>
-      <div><b>F</b> — punch</div><div><b>H</b> — horn &nbsp; <b>L</b> — headlights</div>
-      <div><b>N</b> — radio station</div><div><b>C</b> — camera &nbsp; <b>P</b> — pause</div>
+<div id="hud">
+  <div id="hud-top">
+    <div>
+      <div id="hud-cash">$200</div>
+      <div id="hud-hp-wrap"><div id="hud-hp-fill"></div></div>
     </div>
-    <button class="btn" id="btn-start">START ENGINE</button>
-    <button class="btn ghost" id="btn-continue">CONTINUE</button>
-    <p id="save-note"></p>
+    <div id="hud-right">
+      <div id="hud-clock">18:30</div>
+      <div id="hud-stars">☆☆☆☆☆</div>
+      <div id="hud-speed"></div>
+    </div>
   </div>
+  <div id="hud-objective"></div>
+  <div id="hud-damage"></div>
+  <div id="hud-radio"></div>
+  <canvas id="minimap" width="180" height="180"></canvas>
+  <div id="hud-toast"></div>
+  <div id="hud-banner"></div>
 </div>
 
-<div class="overlay" id="pause-menu">
-  <div class="card">
-    <div class="big">PAUSED</div>
-    <p>Solmar Bay waits for no one — except right now. Your progress is saved.</p>
-    <button class="btn" id="btn-resume">RESUME</button>
-    <button class="btn ghost" id="btn-restart">RESTART STORY</button>
-  </div>
+<div id="menu-start" class="menu">
+  <h1>SOLMAR BAY</h1>
+  <h2>NEON HEAT</h2>
+  <p>Lena Cruz is back in Solmar Bay, and Vic Marino owns the streets.
+  Steal cars, outrun the police, and run five story missions for the
+  Barracuda crew — from a hot-wired sedan to the Kingfish himself.</p>
+  <button id="btn-start">START</button>
+  <button id="btn-continue" class="secondary" style="display:none">CONTINUE</button>
+  <div id="save-note"></div>
+  <div class="keys">WASD / arrows — move &amp; drive &nbsp;·&nbsp; E — steal / exit car &nbsp;·&nbsp; F — punch<br>
+  Space — jump &nbsp;·&nbsp; Shift — sprint &nbsp;·&nbsp; H — horn &nbsp;·&nbsp; L — headlights<br>
+  N — radio &nbsp;·&nbsp; C — camera &nbsp;·&nbsp; P — pause &nbsp;·&nbsp; drag mouse — look</div>
 </div>
 
-<div class="overlay" id="busted-menu">
-  <div class="card">
-    <div class="big red">BUSTED</div>
-    <p id="busted-fine"></p>
-    <button class="btn" id="btn-respawn">WALK IT OFF</button>
-  </div>
+<div id="menu-pause" class="menu">
+  <h1 style="font-size:44px">PAUSED</h1>
+  <p>Progress saved.</p>
+  <button id="btn-resume">RESUME</button>
+  <button id="btn-restart" class="secondary">RESTART STORY</button>
 </div>
 
-<div class="overlay" id="wasted-menu">
-  <div class="card">
-    <div class="big red">WASTED</div>
-    <p>Lena wakes up at the hideout, $200 lighter, twice as angry.</p>
-    <button class="btn" id="btn-respawn2">GET UP</button>
-  </div>
+<div id="menu-dead" class="menu">
+  <h1 id="dead-title">WASTED</h1>
+  <p>The streets of Solmar Bay are unforgiving. Patch yourself up and go again.</p>
+  <button id="btn-respawn">BACK TO THE STREETS</button>
 </div>
 
-<script src="./vendor/three.min.js"></script>
-<script type="module" src="./src/main.js"></script>
+<script src="vendor/three.min.js"></script>
+<script type="module" src="src/main.js"></script>
 </body>
 </html>
