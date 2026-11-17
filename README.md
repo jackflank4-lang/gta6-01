@@ -32,37 +32,29 @@ open http://localhost:8080). No network needed — everything is local.
 ## The city
 
 An 8×8 block grid with a beach and marina to the south, a park, a
-plaza with a fountain, and five landmarks: Meridian Tower (92 m, with
-a beacon), Luna Casino, Rosa's Garage, the Pelican Diner, and the crew
-hideout. Traffic drives the roads and stops at red lights; pedestrians
-stroll the sidewalks and flee from trouble.
+plaza, and landmarks: the Meridian Tower (92 m, with a red beacon),
+the Luna Casino, Rosa's Garage, the Pelican Diner, and the crew hideout.
+Traffic follows the roads and stops at red lights; pedestrians flee
+when you scare them.
 
 ## Missions
 
-1. **Hot Wheels** — steal a car and deliver it to Rosa's Garage.
-   Deliver it undamaged for a $150 bonus.
-2. **Pelican Special** — a timed delivery to the Pelican Diner.
-3. **Plaza Brawl** — clear four thugs out of the plaza.
-4. **Night Shift** — three taxi fares across the city.
-5. **Kingfish Down** — take down Vic Marino (300 HP) and his crew at
-   Meridian Tower.
+1. **Hotwire** — steal a car and deliver it to Rosa's Garage undamaged
+   ($350 + $150 bonus).
+2. **Timed Drop** — deliver a package to the Pelican Diner in 75 seconds
+   ($550).
+3. **Plaza Brawl** — take down four thugs in the plaza ($450).
+4. **Taxi** — three fares across the city ($750).
+5. **Kingfish** — take down Vic Marino (300 HP) and his crew at the
+   Meridian Tower ($5,000).
 
-Plus 12 neon coins hidden around the city ($40 each), a wanted system
-(0–5 stars) with police cruisers and foot cops, car damage and repairs
-at Rosa's Garage, and a save system (autosaves every 30 seconds and on
-pause; Continue on the title screen picks up where you left off).
+Stealing a car raises your wanted level; police cruisers pursue and foot
+cops chase you down. Get busted and you lose $100; get wasted and the
+hospital takes $200. Lose the heat by breaking line of sight for 15
+seconds. Twelve neon coins are hidden around the city, $40 each.
+Rosa's Garage repairs your car.
 
-## Tips
+## Save
 
-- Stealing a car raises your wanted level; lose the police by breaking
-  line of sight for a while and the stars decay.
-- A wrecked car cannot drive — get it to Rosa's Garage or steal another.
-- The radio only plays while you are driving. Headlights help at dusk.
-- Punch thugs before they surround you; each one you drop pays $50.
-
-## Tech
-
-Three.js (vendored) renders the city; all sound is synthesised with
-WebAudio (engine, sirens, horn, crashes, and three original radio
-tracks). The city, traffic and pedestrians are built from one seed
-(777), so every run plays the same streets.
+Progress autosaves every 30 seconds, on pause, and when a mission
+completes. Continue from the start menu to pick up where you left off.
