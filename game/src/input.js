@@ -1,80 +1,92 @@
-// Keyboard + mouse state for Solmar Bay. Classic script, no modules.
-// Rebuild r3: SPACE is now jump on foot (handbrake stays in the car),
-// H honks the horn while driving, L toggles the headlights, and the
-// binding table the menu renders lists the new keys.
-(function () {
-  'use strict';
-  window.SB = window.SB || {};
+// Keyboard and mouse input for Solmar Bay. The game reads keys by their
+// physical `code` (KeyW, Space, KeyE ...) so layouts do not matter. `hit()`
+// reports a key pressed since the last frame (an edge), `down()` reports it
+// held. Mouse drag orbits the camera; the page never needs pointer lock, so
+// the game also works inside a screenshot harness.
 
-  // Human-readable binding table — the menu screen renders this.
-  const BINDINGS = [
-    ['W A S D', 'walk / drive'],
-    ['SHIFT', 'sprint'],
-    ['E', 'enter / exit car (steal it!)'],
-    ['SPACE', 'jump on foot · handbrake in car'],
-    ['H', 'honk the horn · hold at Chop Shop to repair'],
-    ['L', 'headlights on / off'],
-    ['Mouse', 'aim — drag to look around'],
-    ['Click', 'shoot'],
-    ['F', 'punch'],
-    ['C', 'camera: follow / shoulder / high'],
-    ['N', 'switch radio track'],
-    ['P / ESC', 'pause'],
-    ['M', 'mute'],
-    ['R', 'restart'],
-  ];
+// The keys the game listens to. Anything else is ignored on purpose: the
+// browser keeps its own shortcuts (F5, Ctrl+R) and the game never swallows
+// them, which also keeps headless test drivers from fighting the page.
+const GAME_KEYS = new Set([
+  'KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+  'Space', 'ShiftLeft', 'ShiftRight', 'KeyE', 'KeyF', 'KeyH', 'KeyL', 'KeyN', 'KeyC',
+  'KeyM', 'KeyP', 'Escape', 'Enter', 'KeyR',
+]);
 
-  const Input = {
-    keys: {},
-    pressed: {}, // edge-triggered keys, consumed by the game each frame
-    mouseX: 0, mouseY: 0, mouseDown: false, mouseClicked: false,
-    dragDX: 0, dragDY: 0, dragging: false,
-    wheel: 0, // accumulated wheel delta, consumed each frame
-    anyKey: false,
-    bindings: BINDINGS,
-    init: function (canvas) {
-      window.addEventListener('keydown', (e) => {
-        if (e.repeat) return;
-        this.keys[e.code] = true;
-        this.pressed[e.code] = true;
-        this.anyKey = true;
-        if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.code) >= 0) e.preventDefault();
-      });
-      window.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
-      window.addEventListener('blur', () => { this.keys = {}; this.mouseDown = false; this.dragging = false; });
-      canvas.addEventListener('mousemove', (e) => {
-        const r = canvas.getBoundingClientRect();
-        this.mouseX = e.clientX - r.left;
-        this.mouseY = e.clientY - r.top;
-        if (this.dragging) { this.dragDX += e.movementX || 0; this.dragDY += e.movementY || 0; }
-      });
-      canvas.addEventListener('mousedown', (e) => {
-        this.mouseDown = true; this.mouseClicked = true; this.dragging = true;
-        this.anyKey = true;
-        SB.Audio.init(); SB.Audio.startMusic();
-      });
-      window.addEventListener('mouseup', () => { this.mouseDown = false; this.dragging = false; });
-      canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-      canvas.addEventListener('wheel', (e) => { this.wheel += e.deltaY; e.preventDefault(); }, { passive: false });
-    },
-    down: function (code) { return !!this.keys[code]; },
-    wasPressed: function (code) { return !!this.pressed[code]; },
-    endFrame: function () {
-      this.pressed = {};
-      this.mouseClicked = false;
-      this.dragDX = 0; this.dragDY = 0;
-      this.wheel = 0;
-      this.anyKey = false;
-    },
-    // {x: strafe, y: forward} in -1..1
-    axis: function () {
-      let x = 0, y = 0;
-      if (this.down('KeyW') || this.down('ArrowUp')) y += 1;
-      if (this.down('KeyS') || this.down('ArrowDown')) y -= 1;
-      if (this.down('KeyA') || this.down('ArrowLeft')) x -= 1;
-      if (this.down('KeyD') || this.down('ArrowRight')) x += 1;
-      return { x: x, y: y };
-    },
-  };
-  SB.Input = Input;
-})();
+export class Input {
+  constructor() {
+    this.held = new Set();
+    this.pressed = new Set();
+    this.dragX = 0;
+    this.dragY = 0;
+    this.dragging = false;
+    this.lastX = 0;
+    this.lastY = 0;
+    this.anyKeyAt = 0;
+
+    window.addEventListener('keydown', (event) => {
+      if (!GAME_KEYS.has(event.code)) return;
+      if (event.code === 'Space') event.preventDefault();
+      if (!this.held.has(event.code)) this.pressed.add(event.code);
+      this.held.add(event.code);
+      this.anyKeyAt = performance.now();
+    });
+    window.addEventListener('keyup', (event) => {
+      this.held.delete(event.code);
+    });
+    window.addEventListener('blur', () => {
+      this.held.clear();
+      this.dragging = false;
+    });
+    window.addEventListener('mousedown', (event) => {
+      if (event.target && event.target.closest && event.target.closest('button, a, input')) return;
+      this.dragging = true;
+      this.lastX = event.clientX;
+      this.lastY = event.clientY;
+    });
+    window.addEventListener('mousemove', (event) => {
+      if (!this.dragging) return;
+      this.dragX += event.clientX - this.lastX;
+      this.dragY += event.clientY - this.lastY;
+      this.lastX = event.clientX;
+      this.lastY = event.clientY;
+    });
+    window.addEventListener('mouseup', () => {
+      this.dragging = false;
+    });
+  }
+
+  down(code) {
+    return this.held.has(code);
+  }
+
+  hit(code) {
+    return this.pressed.has(code);
+  }
+
+  // Forward/strafe as -1..1 from WASD or the arrow keys.
+  moveVector() {
+    const forward = (this.down('KeyW') || this.down('ArrowUp') ? 1 : 0)
+      - (this.down('KeyS') || this.down('ArrowDown') ? 1 : 0);
+    const strafe = (this.down('KeyD') || this.down('ArrowRight') ? 1 : 0)
+      - (this.down('KeyA') || this.down('ArrowLeft') ? 1 : 0);
+    return { forward, strafe };
+  }
+
+  sprint() {
+    return this.down('ShiftLeft') || this.down('ShiftRight');
+  }
+
+  // Mouse drag since the last call, in pixels; calling it consumes the delta.
+  takeDrag() {
+    const out = { x: this.dragX, y: this.dragY };
+    this.dragX = 0;
+    this.dragY = 0;
+    return out;
+  }
+
+  // Called by the engine at the end of every frame: edges live one frame only.
+  endFrame() {
+    this.pressed.clear();
+  }
+}

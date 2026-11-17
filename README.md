@@ -1,84 +1,68 @@
 # Solmar Bay — Neon Heat
 
-[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
-[![rank](https://make.fun/badge/gta6-01/jackflank4-lang/gta6-01/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
-[![reward](https://make.fun/badge/gta6-01/jackflank4-lang/gta6-01/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+An open-world crime game in the spirit of GTA 6, built from scratch for the
+make.fun **gta6-01** bounty. It plays offline in a desktop browser from static
+files — no network, no build step, every sound synthesised live with WebAudio.
 
-An open-world crime game in the spirit of GTA 6 — built for the
-[make.fun "Make GTA 6" bounty](https://make.fun/bounty/gta6-01). You are
-**Dax Marlowe**, back in the fictional coastal city of **Solmar Bay** with
-empty pockets and a debt to the Kingfish crew. Steal cars, run five story
-missions for Mama Lou, dodge the Solmar PD — and take the city back.
+## The game
 
-Everything is original: the city, characters, vehicles, names, story, art,
-sound and music are all made for this game. Nothing is from Rockstar Games.
+Lena Cruz is out of the county lockup with $200 and a grudge. Solmar Bay is
+hers to take: a dusk-lit procedural city on a bay, 8×8 blocks of streets,
+traffic, pedestrians, a marina, a beach, the Meridian Tower and the Luna
+Casino glowing over the east side.
 
-This is rebuild r3: the first version's recording died unsealed, the second
-rebuild's seal failed on a chunk mismatch, so the whole game was rebuilt
-again under a fresh recording — same story, new seed, new features.
+**Systems, all wired together:**
 
-## Play it
+- **On foot and by car** — walk the sidewalks, sprint, jump; steal any
+  parked or traffic car with E and drive it. Arcade handling with
+  acceleration, braking, handbrake drift and damage.
+- **Traffic AI** — 14 cars looping the blocks, stopping at red lights,
+  slowing for the car ahead; 10 parked cars waiting to be stolen.
+- **Pedestrians** — 22 walkers strolling the sidewalks who scatter when a car
+  screams past or a punch lands.
+- **Wanted system** — 0–5 stars for stealing, hitting civilians or cops.
+  Cruisers spawn, chase and ram; foot cops try to hold you and bust you.
+  Lay low out of sight and the heat cools off.
+- **Story missions** — five jobs with payouts and an undamaged-delivery
+  bonus: steal a car for Rosa's Garage, a timed courier run to the marina,
+  a plaza brawl with the Barracudas, three night fares, and the finale
+  against boss Vic Marino on top of the Meridian Tower.
+- **Combat** — punch thugs and cops; thugs fight back, the boss hits harder.
+- **HUD** — cash, health, wanted stars, clock, speed, a circular minimap
+  (roads, traffic, police, mission beacon), objectives and toasts.
+- **Extras** — 12 gold coins to collect, three radio stations, headlights,
+  horn, three camera modes, day clock, and a save that persists in
+  localStorage (autosaves every 30 s, on pause and on mission complete).
 
-```sh
-node serve.ts
-```
+## Controls
 
-Then open the printed local address in desktop Chrome.
+| Key | Action |
+| --- | --- |
+| W A S D / arrows | Walk / drive |
+| Mouse drag | Look around |
+| E | Steal car / exit car |
+| Space | Jump (on foot) / handbrake (in car) |
+| F | Punch |
+| H | Horn |
+| L | Headlights |
+| N | Next radio station |
+| C | Camera mode |
+| P / Esc | Pause |
+| M | Mute |
 
-- **W A S D** — walk / drive · **SHIFT** — sprint · **SPACE** — jump on foot / handbrake in car
-- **E** — enter / exit car (steal it!) · **H** — honk · hold at the Chop Shop to repair · **L** — headlights
-- **Mouse** — aim · **Click** — shoot · **F** — punch
-- **C** — camera: follow / shoulder / high · **N** — switch radio track (3 tracks now)
-- **P / ESC** — pause · **M** — mute · **R** — restart
-- **Drag mouse** — look around · **Wheel** — zoom · progress auto-saves (localStorage)
+## Play
 
-## What's in the game
+Serve `game/` with any static server and open `game/index.html`, or run
+`node serve.ts` and open http://localhost:8080. Screenshots are staged with
+`?shot=start|drive|chase|mission`.
 
-- **A procedural city**: 9×9 blocks of roads, buildings with lit windows,
-  parks and paved plazas with benches, street lamps, traffic lights, neon
-  billboards, a beach with a boardwalk, a wooden pier and a turning ferris
-  wheel, a marina with five boats — plus a helipad on Kingfish Tower and a
-  new Casino Royale landmark.
-- **On foot and by car**: third-person character who can now **jump**,
-  arcade driving with a **horn** that startles traffic ahead and
-  **headlights** for the dusk; enter/exit any car — steal parked cars free,
-  jack traffic cars (the driver bails and the PD notices). **Car damage**:
-  crashes dent your ride, smoke pours out past 60% damage, and the Chop
-  Shop repairs it for cash.
-- **Traffic + pedestrians**: cars drive the road network, honk at stopped
-  traffic and overtake; pedestrians stroll the sidewalks and flee gunfire
-  and speeding cars.
-- **Wanted level + police**: 0–5 stars. Police cars chase, ram, and bust
-  you — and **foot cops** run you down on foot, too. Lose them by distance,
-  time, or laying low at the Hideout.
-- **5 story missions** ($350–$5,000): Hot Wheels (undamaged-delivery bonus
-  now $150), Payback, Heat Run, The Drop (90-second delivery), and Kingfish
-  Falls — where the boss (300 HP) calls reinforcements at half health. Then
-  free roam.
-- **Collectibles**: 12 neon coins hidden around the city, $40 each.
-- **Combat**: melee punches and a pistol (ammo crates at the Hideout, Chop
-  Shop and Casino), health packs at the hospital, health regen when the heat
-  is off.
-- **HUD**: minimap with roads, mission marker, police, foot-cop and thug
-  blips, coin dots, casino and boat markers; wanted stars, health bar,
-  car-damage bar, money, ammo, coin count, a dusk clock, speedometer,
-  objective banner.
-- **Polish**: the afternoon sun drifts toward a pink dusk as you play,
-  mission beacon, engine hum, police sirens and a three-track radio — all
-  synthesised with WebAudio, no audio files.
+## Tech
 
-## How it is built
+- three.js (vendored UMD build under `game/vendor/`) for the 3D city
+- ES modules under `game/src/`, one file per system
+- `main.ts` (Node 22, stdlib only) copies `game/` and `screenshots/` to
+  `/output` and writes `dossier.json` with the vendored make.fun library
 
-- `game/` — the game itself, plain static files, no network at runtime:
-  `index.html` plus `src/` (config, seeded RNG, input, synthesised sound,
-  procedural city, three.js renderer, world rules, main loop) and
-  `vendor/three.min.js` (three.js r158, vendored).
-- `main.ts` — the entrypoint: copies `game/` and `screenshots/` to `/output`
-  and writes `/output/dossier.json` with the vendored make.fun library.
-- `screenshots/` — four real renders of the game's own code: title, driving,
-  police chase, and the tower finale.
-- `shots.json` — how each screenshot was staged (`?shot=` scenes).
-- `.makefun/owner.json` — the owner's wallet for this entry.
+## License
 
-Entered on [make.fun](https://make.fun/bounty/gta6-01) — referral link:
-https://make.fun/r/g7tqc4ex
+MIT — see LICENSE.
