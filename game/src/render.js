@@ -1,8 +1,8 @@
 // three.js scene for Solmar Bay: ground, buildings, props, vehicles, people,
 // camera follow, and the 2D minimap. No external assets — textures are canvas-made.
-// Rebuild r2: three camera modes (follow / shoulder / high), a dusk sky that
-// shifts with play time, traffic lights, neon billboards, a boardwalk,
-// a helipad on Kingfish Tower, spinning coin pickups and damage smoke.
+// Rebuild r3: a headlight spotlight the player toggles with L, boats in the
+// marina, octahedron coins instead of rings, a wider follow camera, a faster
+// ferris wheel, and a minimap that marks the Casino Royale and the boats.
 (function () {
   'use strict';
   window.SB = window.SB || {};
@@ -15,11 +15,11 @@
     city: null, facadeCache: {},
     playerMesh: null, carMeshes: new Map(), pedMeshes: new Map(),
     markerMesh: null, markerRing: null, beaconLight: null,
-    camYaw: 0, camPitch: 0.30, camDist: 22, camZoom: 0, camOrbit: 0,
+    camYaw: 0, camPitch: 0.30, camDist: 24, camZoom: 0, camOrbit: 0,
     cameraMode: 0,
     tracer: null, muzzle: null,
     trafficLights: [], coinMeshes: [], smokePuffs: [],
-    sunLight: null, hemiLight: null,
+    sunLight: null, hemiLight: null, headSpot: null, headSpotOn: false,
 
     init: function (canvas, city) {
       this.canvas = canvas;
@@ -40,12 +40,19 @@
       this.scene.add(this.sunLight);
       this.scene.add(new THREE.AmbientLight(0xffffff, 0.18));
 
+      // Headlight beam: a spotlight that follows the player's car (L toggles it).
+      this.headSpot = new THREE.SpotLight(0xfff6c8, 0, 70, 0.45, 0.5, 1.2);
+      this.headSpot.position.set(0, -10, 0);
+      this.scene.add(this.headSpot);
+      this.scene.add(this.headSpot.target);
+
       this.buildGround(city);
       this.buildBuildings(city);
       this.buildProps(city);
       this.buildTrafficLights(city);
       this.buildBillboards(city);
       this.buildPier(city);
+      this.buildBoats(city);
       this.buildMarker();
       this.buildPlayer();
       this.tracer = new THREE.Mesh(
@@ -79,12 +86,12 @@
       // Boardwalk planks along the sand.
       const walk = new THREE.Mesh(
         new THREE.BoxGeometry(700, 0.4, 8),
-        new THREE.MeshLambertMaterial({ color: 0x7a5a38 }));
+        new THREE.MeshLambertMaterial({ color: 0x6a4a28 }));
       walk.position.set(0, 0.2, city.beachZ - 2);
       this.scene.add(walk);
     },
     facade: function (color) {
-      if (!this.facadeCache[color]) this.facadeCache[color] = SB.makeFacadeTexture(color, 0.35);
+      if (!this.facadeCache[color]) this.facadeCache[color] = SB.makeFacadeTexture(color, 0.4);
       return this.facadeCache[color];
     },
     buildBuildings: function (city) {
@@ -102,7 +109,8 @@
         this.scene.add(roof);
         if (b.name) {
           // rooftop sign: a small glowing box so landmarks read from afar
-          const sign = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({ color: 0xffe14d }));
+          const signColor = b.name.indexOf('CASINO') === 0 ? 0xff5e8a : 0xffe14d;
+          const sign = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({ color: signColor }));
           sign.scale.set(Math.min(b.w * 0.7, 18), 1.6, 0.4);
           sign.position.set(b.x, b.h + 2.2, b.z - b.d / 2 - 0.4);
           this.scene.add(sign);
@@ -152,6 +160,16 @@
         head.position.set(l.x, 6.2, l.z);
         this.scene.add(head);
       }
+      // plaza benches: low wooden slabs
+      const benchGeo = new THREE.BoxGeometry(3, 0.5, 1);
+      const benchMat = new THREE.MeshLambertMaterial({ color: 0x6a4a28 });
+      for (const p of city.plazas) {
+        for (const [ox, oz] of [[-8, -8], [8, 8], [-8, 8], [8, -8]]) {
+          const bench = new THREE.Mesh(benchGeo, benchMat);
+          bench.position.set(p.x + ox, 0.5, p.z + oz);
+          this.scene.add(bench);
+        }
+      }
     },
     buildTrafficLights: function (city) {
       const poleGeo = new THREE.CylinderGeometry(0.14, 0.14, 7, 6);
@@ -177,7 +195,7 @@
           this.scene.add(dot);
           lamps[name] = mat;
         }
-        this.trafficLights.push({ mats: lamps, offset: i * 1.7 });
+        this.trafficLights.push({ mats: lamps, offset: i * 2.1 });
       }
     },
     buildBillboards: function (city) {
@@ -207,7 +225,7 @@
     },
     buildPier: function (city) {
       // Wooden pier jutting into the water at the south edge.
-      const pierMat = new THREE.MeshLambertMaterial({ color: 0x7a5a38 });
+      const pierMat = new THREE.MeshLambertMaterial({ color: 0x6a4a28 });
       const pier = new THREE.Mesh(new THREE.BoxGeometry(24, 1, 46), pierMat);
       pier.position.set(city.places.pier.x, 0.6, city.beachZ + 34 + 18);
       this.scene.add(pier);
@@ -237,6 +255,24 @@
         leg.position.set(city.places.pier.x + 16 + sx * 5, 7, city.beachZ + 34 + 30);
         leg.rotation.z = -sx * 0.3;
         this.scene.add(leg);
+      }
+    },
+    buildBoats: function (city) {
+      // Marina boats: white hull + cabin, bobbing in the water.
+      const hullMat = new THREE.MeshLambertMaterial({ color: 0xf0f0f0 });
+      const cabinMat = new THREE.MeshLambertMaterial({ color: 0x2a4a6a });
+      this.boatMeshes = [];
+      for (const b of city.boats) {
+        const g = new THREE.Group();
+        const hull = new THREE.Mesh(new THREE.BoxGeometry(3, 1.2, b.len), hullMat);
+        hull.position.y = 0.4;
+        const cabin = new THREE.Mesh(new THREE.BoxGeometry(2, 1.4, b.len * 0.4), cabinMat);
+        cabin.position.set(0, 1.6, -b.len * 0.15);
+        g.add(hull, cabin);
+        g.position.set(b.x, 0.1, b.z);
+        g.rotation.y = b.angle;
+        this.scene.add(g);
+        this.boatMeshes.push(g);
       }
     },
     buildMarker: function () {
@@ -291,7 +327,7 @@
     },
     makePerson: function (shirtColor, skinColor) {
       const g = new THREE.Group();
-      const skin = new THREE.MeshLambertMaterial({ color: skinColor || 0xc98a5a });
+      const skin = new THREE.MeshLambertMaterial({ color: skinColor || 0xd08a5a });
       const shirt = new THREE.MeshLambertMaterial({ color: shirtColor });
       const pants = new THREE.MeshLambertMaterial({ color: 0x3a3a44 });
       const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 8), skin);
@@ -311,7 +347,7 @@
     },
     // Foot cop: dark uniform, police cap, badge dot.
     makeFootCop: function () {
-      const g = this.makePerson(0x1a2a4a);
+      const g = this.makePerson(0x16223e);
       const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.44, 0.16, 10),
         new THREE.MeshLambertMaterial({ color: 0x101828 }));
       cap.position.y = 1.88;
@@ -323,11 +359,11 @@
       return g;
     },
     makeCoin: function (x, z) {
+      // Spinning octahedron gem instead of the old torus ring.
       const m = new THREE.Mesh(
-        new THREE.TorusGeometry(0.8, 0.28, 8, 16),
+        new THREE.OctahedronGeometry(0.9),
         new THREE.MeshBasicMaterial({ color: SB.PALETTE.coin }));
       m.position.set(x, 1.1, z);
-      m.rotation.x = Math.PI / 2.4;
       this.scene.add(m);
       this.coinMeshes.push(m);
       return m;
@@ -386,10 +422,31 @@
     },
     removeMesh: function (m) { if (m) this.scene.remove(m); },
 
+    // ---- headlights ----
+    setHeadlights: function (on) {
+      this.headSpotOn = !!on;
+      if (this.headSpot) this.headSpot.intensity = on ? 2.5 : 0;
+      return this.headSpotOn;
+    },
+    aimHeadlights: function (world) {
+      if (!this.headSpot) return;
+      const p = world.player;
+      if (!this.headSpotOn || !p.inCar) {
+        this.headSpot.position.set(0, -10, 0);
+        return;
+      }
+      const car = world.cars.find((c) => c.id === p.carId);
+      if (!car) return;
+      const fx = Math.sin(car.angle), fz = Math.cos(car.angle);
+      this.headSpot.position.set(car.x + fx * 2, 1.2, car.z + fz * 2);
+      this.headSpot.target.position.set(car.x + fx * 40, 0.5, car.z + fz * 40);
+      this.headSpot.target.updateMatrixWorld();
+    },
+
     // ---- per-frame sync ----
     syncPlayer: function (p, t) {
       const m = this.playerMesh;
-      m.position.set(p.x, 0, p.z);
+      m.position.set(p.x, p.y || 0, p.z);
       m.rotation.y = p.angle;
       const moving = p.moving ? 1 : 0;
       const s = Math.sin(t * 11) * 0.55 * moving;
@@ -419,8 +476,8 @@
       mesh.userData.armL.rotation.x = -s * 0.7;
       mesh.userData.armR.rotation.x = s * 0.7;
     },
-    // Camera: three modes. FOLLOW is the v1 chase cam; SHOULDER is a close
-    // over-the-shoulder view; HIGH is a high chase cam. Wheel zooms.
+    // Camera: three modes. FOLLOW is a wider chase cam than v2; SHOULDER is
+    // a close over-the-shoulder view; HIGH is a high chase cam. Wheel zooms.
     setCameraMode: function (mode) {
       this.cameraMode = ((mode % CAMERA_MODES.length) + CAMERA_MODES.length) % CAMERA_MODES.length;
       return CAMERA_MODES[this.cameraMode];
@@ -438,13 +495,13 @@
         pitch = 0.12;
         height = 2.6;
       } else if (this.cameraMode === 2) { // high
-        dist = 30 + this.camZoom;
+        dist = 32 + this.camZoom;
         pitch = 0.55;
-        height = 6;
+        height = 7;
       } else { // follow
-        dist = (focus.inCar ? 22 : 18) + this.camZoom;
+        dist = (focus.inCar ? 24 : 19) + this.camZoom;
         pitch = this.camPitch;
-        height = 4;
+        height = 4.5;
       }
       const cx = focus.x - Math.sin(this.camYaw) * Math.cos(pitch) * dist;
       const cz = focus.z - Math.cos(this.camYaw) * Math.cos(pitch) * dist;
@@ -475,7 +532,7 @@
         if (this._tracerT <= 0) this.tracer.visible = false;
       }
     },
-    // Dusk sweep: sky, fog and sun drift from afternoon gold to dusk orange
+    // Dusk sweep: sky, fog and sun drift from afternoon gold to dusk pink
     // across CFG.duskCycle seconds of play, then hold at dusk.
     updateSky: function (t) {
       const k = Math.min(1, (t % CFG.duskCycle) / CFG.duskCycle);
@@ -495,21 +552,24 @@
     },
     render: function (t) {
       const now = (t === undefined ? 0 : t);
-      if (this.ferrisWheel) this.ferrisWheel.rotation.z += 0.0015;
+      if (this.ferrisWheel) this.ferrisWheel.rotation.z += 0.0025;
       if (this.markerRing && this.markerRing.visible) {
         const s = 1 + Math.sin(performance.now() / 300) * 0.12;
         this.markerRing.scale.set(s, s, 1);
       }
-      // traffic lights cycle: green 6s, amber 1.5s, red 6s, offset per light
+      // traffic lights cycle: green 7s, amber 1.5s, red 6.5s, offset per light
       for (const tl of this.trafficLights) {
-        const ph = ((now + tl.offset) % 13.5);
+        const ph = ((now + tl.offset) % 15);
         const on = (c, v) => tl.mats[c].color.setHex(v ? (c === 'red' ? 0xff2d2d : c === 'amber' ? 0xffb02d : 0x37d67a) : 0x331111);
-        on('green', ph < 6);
-        on('amber', ph >= 6 && ph < 7.5);
-        on('red', ph >= 7.5);
+        on('green', ph < 7);
+        on('amber', ph >= 7 && ph < 8.5);
+        on('red', ph >= 8.5);
       }
-      // coins spin; smoke puffs rise and fade
-      for (const c of this.coinMeshes) { c.rotation.z += 0.03; c.position.y = 1.1 + Math.sin(now * 2 + c.position.x) * 0.15; }
+      // coins spin and bob; boats bob; smoke puffs rise and fade
+      for (const c of this.coinMeshes) { c.rotation.y += 0.05; c.rotation.x += 0.01; c.position.y = 1.1 + Math.sin(now * 2 + c.position.x) * 0.15; }
+      if (this.boatMeshes) {
+        for (const b of this.boatMeshes) { b.position.y = 0.1 + Math.sin(now * 0.8 + b.position.x) * 0.12; b.rotation.z = Math.sin(now * 0.6 + b.position.z) * 0.02; }
+      }
       for (let i = this.smokePuffs.length - 1; i >= 0; i--) {
         const p = this.smokePuffs[i];
         p.life -= 0.016;
@@ -530,12 +590,12 @@
       g.clearRect(0, 0, S, S);
       g.fillStyle = '#12203a'; g.fillRect(0, 0, S, S);
       // water + beach
-      g.fillStyle = '#1e6f9e'; g.fillRect(0, toY(world.city.beachZ + 34), S, S);
-      g.fillStyle = '#e0c98f'; g.fillRect(0, toY(world.city.beachZ), S, toY(world.city.beachZ + 34) - toY(world.city.beachZ));
+      g.fillStyle = '#1a6f8e'; g.fillRect(0, toY(world.city.beachZ + 34), S, S);
+      g.fillStyle = '#e6cf95'; g.fillRect(0, toY(world.city.beachZ), S, toY(world.city.beachZ + 34) - toY(world.city.beachZ));
       // parks + plazas
-      g.fillStyle = '#4f8f3a';
+      g.fillStyle = '#558f3e';
       for (const p of world.city.parks) g.fillRect(toX(p.x - p.w / 2), toY(p.z - p.d / 2), p.w / (2 * H) * S, p.d / (2 * H) * S);
-      g.fillStyle = '#b9b3a4';
+      g.fillStyle = '#c2b8a8';
       for (const p of world.city.plazas) g.fillRect(toX(p.x - p.w / 2), toY(p.z - p.d / 2), p.w / (2 * H) * S, p.d / (2 * H) * S);
       // roads
       g.strokeStyle = '#5a6068'; g.lineWidth = 5;
@@ -545,8 +605,15 @@
       // buildings
       g.fillStyle = '#8d9299';
       for (const b of world.city.buildings) g.fillRect(toX(b.x - b.w / 2), toY(b.z - b.d / 2), Math.max(2, b.w / (2 * H) * S), Math.max(2, b.d / (2 * H) * S));
+      // casino: magenta square
+      const casino = world.city.places.casino;
+      g.fillStyle = '#ff5e8a';
+      g.fillRect(toX(casino.x) - 4, toY(casino.z) - 4, 8, 8);
+      // boats: white dots in the water
+      g.fillStyle = '#ffffff';
+      for (const b of world.city.boats) { g.beginPath(); g.arc(toX(b.x), toY(b.z), 2, 0, Math.PI * 2); g.fill(); }
       // coins (gold dots)
-      g.fillStyle = '#ffe14d';
+      g.fillStyle = '#ffd23c';
       for (const c of world.coins) {
         if (!c.taken) { g.beginPath(); g.arc(toX(c.x), toY(c.z), 2.5, 0, Math.PI * 2); g.fill(); }
       }
