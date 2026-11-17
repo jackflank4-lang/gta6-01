@@ -35,6 +35,7 @@ export class Game {
     this.beaconMesh = null;
     this.car = null; // the player's car, or null on foot
     this.repairArmed = true;
+    this.cruiseSpeed = 0; // staged shots only: holds the car at a fixed speed
 
     this.renderer = new THREE.WebGLRenderer({
       canvas,
@@ -476,6 +477,7 @@ export class Game {
       else c.speed -= Math.sign(c.speed) * Math.min(Math.abs(c.speed), 6 * dt);
     }
     c.speed = Math.max(-10, Math.min(28, c.speed));
+    if (this.cruiseSpeed > 0) c.speed = this.cruiseSpeed;
     const turnRate = 1.9 * Math.min(1, Math.abs(c.speed) / 9);
     c.heading += steer * turnRate * dt * (c.speed >= 0 ? 1 : -1);
     const nx = c.mesh.position.x + Math.sin(c.heading) * c.speed * dt;

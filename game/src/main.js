@@ -27,11 +27,13 @@ if (shot) {
   } catch (err) {
     window.__errors.push(`STAGE-ERROR: ${String(err).slice(0, 200)}`);
   }
-  // Let a few frames render before the driver captures.
+  // Let a few frames render before the driver captures. At the software
+  // renderer's pace 12 frames is several real seconds but under a second
+  // of game time, so staged scenes stay composed.
   let frames = 0;
   const tick = () => {
     frames += 1;
-    if (frames >= 45) {
+    if (frames >= 12) {
       window.__shotReady = true;
       return;
     }
