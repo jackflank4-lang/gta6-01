@@ -424,15 +424,20 @@ export class Game {
   }
 
   // ---- the frame loop ----
-  // Edges (key presses) are cleared right after update() consumes them, NOT
-  // after rendering: on a slow renderer a key pressed during a long render
-  // would otherwise be swallowed before the next frame ever saw it.
+  // Edges are snapshotted at the start of the frame (see Input.beginFrame):
+  // a press during a long render survives to the next frame, and a press
+  // during update() lands in the next frame's snapshot. P / Escape toggles
+  // pause here so it also works while paused (update() does not run then).
   loop() {
     const now = performance.now();
     const dt = Math.min(0.05, (now - this.lastTick) / 1000);
     this.lastTick = now;
+    this.input.beginFrame();
+    if (this.input.hit('KeyP') || this.input.hit('Escape')) {
+      if (this.state === 'playing') this.pause();
+      else if (this.state === 'paused') this.resume();
+    }
     if (this.state === 'playing') this.update(dt);
-    this.input.endFrame();
     this.time += dt;
     this.city.update(dt, this.time);
     this.renderer.render(this.scene, this.camera);
@@ -443,8 +448,7 @@ export class Game {
     this.clockMin += dt * 2.2; // a game day runs about 11 real minutes
     if (this.clockMin >= 24 * 60) this.clockMin -= 24 * 60;
 
-    // Global keys.
-    if (this.input.hit('KeyP') || this.input.hit('Escape')) { this.pause(); return; }
+    // Global keys (pause is handled in the frame loop so it toggles).
     if (this.input.hit('KeyM')) {
       this.muted = !this.muted;
       this.sound.setMuted(this.muted);

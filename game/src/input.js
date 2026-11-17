@@ -17,6 +17,7 @@ export class Input {
   constructor() {
     this.held = new Set();
     this.pressed = new Set();
+    this.framePressed = new Set();
     this.dragX = 0;
     this.dragY = 0;
     this.dragging = false;
@@ -61,7 +62,7 @@ export class Input {
   }
 
   hit(code) {
-    return this.pressed.has(code);
+    return this.framePressed.has(code);
   }
 
   // Forward/strafe as -1..1 from WASD or the arrow keys.
@@ -85,8 +86,13 @@ export class Input {
     return out;
   }
 
-  // Called by the engine at the end of every frame: edges live one frame only.
-  endFrame() {
-    this.pressed.clear();
+  // Called by the engine at the START of every frame: the presses that
+  // accumulated since the last frame become this frame's snapshot, and a
+  // fresh set collects presses arriving during update() and rendering.
+  // No press is ever lost (render-time presses survive to the next frame)
+  // and no press fires twice (each snapshot is consumed once).
+  beginFrame() {
+    this.framePressed = this.pressed;
+    this.pressed = new Set();
   }
 }
