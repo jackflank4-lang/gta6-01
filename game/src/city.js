@@ -1,8 +1,9 @@
 // Procedural city of Solmar Bay: grid roads, building blocks, parks, plazas,
-// beach, boardwalk, pier, and the named landmarks the missions use.
-// Rebuild r2: same 9x9 grid and landmark plots as v1 (missions depend on
-// them), but re-laid out — plaza blocks, a neon strip, traffic lights,
-// billboards, a boardwalk and a helipad on Kingfish Tower.
+// beach, boardwalk, pier, marina, and the named landmarks the missions use.
+// Rebuild r3: a new seed lays the blocks out differently; a Casino Royale
+// landmark joins the skyline, boats bob in the marina south of the beach,
+// plazas get benches, lamps line both sides of the roads, and the ground
+// texture is redrawn with wider crosswalks and a pinker dusk tint.
 (function () {
   'use strict';
   window.SB = window.SB || {};
@@ -18,6 +19,7 @@
     { plot: '-3,-4', name: 'CHOP SHOP', w: 24, d: 18, h: 9, color: 0x8a6f8a },
     { plot: '3,3', name: 'ST. MARIA HOSPITAL', w: 24, d: 20, h: 16, color: 0xe8e8e8 },
     { plot: '-4,-4', name: 'HIDEOUT', w: 18, d: 16, h: 9, color: 0x5f7f6f },
+    { plot: '0,-4', name: 'CASINO ROYALE', w: 26, d: 20, h: 20, color: 0x7a2a5a },
   ];
   const LANDMARK_PLOTS = {};
   for (const lm of LANDMARKS) LANDMARK_PLOTS[lm.plot] = lm;
@@ -33,6 +35,7 @@
         plazas: [],      // {x, z, w, d} — paved squares with benches
         lights: [],      // {x, z} traffic-light intersections
         billboards: [],  // {x, z, angle, hue}
+        boats: [],       // {x, z, angle, len} — marina boats in the water
         colliders: [],   // AABBs {minX, maxX, minZ, maxZ} — buildings + props
         parkedSpots: [], // {x, z, angle}
         roadLines: [],   // road centre lines, for minimap + traffic
@@ -63,56 +66,61 @@
             continue;
           }
           const roll = rng.next();
-          if (roll < 0.12) {
+          if (roll < 0.10) {
             // Park block.
             city.parks.push({ x: cx, z: cz, w: B, d: B });
-            for (let t = 0; t < 7; t++) {
-              city.trees.push({ x: cx + rng.range(-B / 2 + 6, B / 2 - 6), z: cz + rng.range(-B / 2 + 6, B / 2 - 6), s: rng.range(0.8, 1.4) });
+            for (let t = 0; t < 8; t++) {
+              city.trees.push({ x: cx + rng.range(-B / 2 + 6, B / 2 - 6), z: cz + rng.range(-B / 2 + 6, B / 2 - 6), s: rng.range(0.8, 1.5) });
             }
             continue;
           }
-          if (roll < 0.2) {
-            // Plaza block: paved square, benches, two trees.
+          if (roll < 0.18) {
+            // Plaza block: paved square, benches, three trees.
             city.plazas.push({ x: cx, z: cz, w: B, d: B });
-            for (let t = 0; t < 2; t++) {
-              city.trees.push({ x: cx + rng.range(-B / 2 + 8, B / 2 - 8), z: cz + rng.range(-B / 2 + 8, B / 2 - 8), s: rng.range(0.9, 1.2) });
+            for (let t = 0; t < 3; t++) {
+              city.trees.push({ x: cx + rng.range(-B / 2 + 8, B / 2 - 8), z: cz + rng.range(-B / 2 + 8, B / 2 - 8), s: rng.range(0.9, 1.3) });
             }
             continue;
           }
-          // 1–3 buildings per block.
-          const n = rng.int(1, 3);
+          // 1–4 buildings per block.
+          const n = rng.int(1, 4);
           for (let k = 0; k < n; k++) {
-            const w = rng.range(14, 26), d = rng.range(14, 26);
-            const ox = (k % 2 === 0 ? -1 : 1) * rng.range(6, B / 2 - w / 2 - 2);
-            const oz = (k < 2 ? -1 : 1) * rng.range(6, B / 2 - d / 2 - 2);
-            const h = rng.chance(0.18) ? rng.range(34, 58) : rng.range(8, 26);
+            const w = rng.range(13, 25), d = rng.range(13, 25);
+            const ox = (k % 2 === 0 ? -1 : 1) * rng.range(5, B / 2 - w / 2 - 2);
+            const oz = (k < 2 ? -1 : 1) * rng.range(5, B / 2 - d / 2 - 2);
+            const h = rng.chance(0.22) ? rng.range(36, 62) : rng.range(8, 28);
             const b = { x: cx + ox, z: cz + oz, w: w, d: d, h: h, color: rng.pick(SB.PALETTE.building), roof: rng.pick(SB.PALETTE.roof) };
             city.buildings.push(b);
             city.colliders.push({ minX: b.x - w / 2, maxX: b.x + w / 2, minZ: b.z - d / 2, maxZ: b.z + d / 2 });
           }
-          if (rng.chance(0.5)) city.trees.push({ x: cx + rng.range(-20, 20), z: cz + rng.range(-20, 20), s: rng.range(0.8, 1.3) });
+          if (rng.chance(0.55)) city.trees.push({ x: cx + rng.range(-20, 20), z: cz + rng.range(-20, 20), s: rng.range(0.8, 1.3) });
         }
       }
 
       // Neon Row: billboards along the central north-south road.
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 10; i++) {
         const z = roadCoord(rng.int(-3, 3)) + rng.range(-20, 20);
-        city.billboards.push({ x: rng.chance(0.5) ? 10 : -10, z: z, angle: rng.chance(0.5) ? 0 : Math.PI, hue: rng.pick([0xff2d78, 0x2dd4ff, 0xffe14d, 0x7dff5e]) });
+        city.billboards.push({ x: rng.chance(0.5) ? 10 : -10, z: z, angle: rng.chance(0.5) ? 0 : Math.PI, hue: rng.pick([0xff2d78, 0x2dd4ff, 0xffe14d, 0x7dff5e, 0xff5e8a]) });
       }
 
-      // Street lamps along roads.
+      // Street lamps along both sides of each road.
       for (let i = -HB; i <= HB; i++) {
         for (let j = -HB; j < HB; j++) {
-          if (rng.chance(0.6)) city.lamps.push({ x: roadCoord(i) + R / 2 + 1.5, z: roadCoord(j) + rng.range(-30, 30) });
+          if (rng.chance(0.55)) city.lamps.push({ x: roadCoord(i) + R / 2 + 1.5, z: roadCoord(j) + rng.range(-30, 30) });
+          if (rng.chance(0.4)) city.lamps.push({ x: roadCoord(i) - R / 2 - 1.5, z: roadCoord(j) + rng.range(-30, 30) });
         }
       }
       // Parked cars along road edges.
-      for (let i = 0; i < 26; i++) {
+      for (let i = 0; i < 28; i++) {
         const horiz = rng.chance(0.5);
         const road = roadCoord(rng.int(-HB, HB));
         const along = rng.range(-HB * P, HB * P);
         if (horiz) city.parkedSpots.push({ x: along, z: road + (rng.chance(0.5) ? 5.5 : -5.5), angle: rng.chance(0.5) ? 0 : Math.PI });
         else city.parkedSpots.push({ x: road + (rng.chance(0.5) ? 5.5 : -5.5), z: along, angle: rng.chance(0.5) ? Math.PI / 2 : -Math.PI / 2 });
+      }
+      // Marina: five boats moored in the water south of the beach.
+      for (let i = 0; i < 5; i++) {
+        city.boats.push({ x: -160 + i * 80 + rng.range(-12, 12), z: 400 + rng.range(0, 26), angle: rng.range(-0.3, 0.3), len: rng.range(10, 16) });
       }
       // Neon coins: hidden around the city (rooftop-adjacent streets, parks, pier).
       const coinSpots = [];
@@ -133,6 +141,7 @@
         chopshop: { x: -200, z: -280, label: 'Chop Shop' },
         hospital: { x: 280, z: 280, label: 'St. Maria Hospital' },
         hideout: { x: -280, z: -280, label: 'Hideout' },
+        casino: { x: 40, z: -280, label: 'Casino Royale' },
         pier: { x: 0, z: 392, label: 'Solmar Pier' },
         spawn: { x: -280, z: 232, label: 'Spawn' },
       };
@@ -215,26 +224,26 @@
     const W2S = (v) => (v + 400) / 800 * S;
     const P = CFG.pitch, R = CFG.road, HB = CFG.halfBlocks;
     // base: sidewalks grey
-    g.fillStyle = '#8d9299'; g.fillRect(0, 0, S, S);
+    g.fillStyle = '#93989f'; g.fillRect(0, 0, S, S);
     // parks green, plazas paved light
-    g.fillStyle = '#4f8f3a';
+    g.fillStyle = '#558f3e';
     for (const p of city.parks) g.fillRect(W2S(p.x - p.w / 2), W2S(p.z - p.d / 2), p.w / 800 * S, p.d / 800 * S);
-    g.fillStyle = '#b9b3a4';
+    g.fillStyle = '#c2b8a8';
     for (const p of city.plazas) g.fillRect(W2S(p.x - p.w / 2), W2S(p.z - p.d / 2), p.w / 800 * S, p.d / 800 * S);
     // beach + water (south edge, z > beachZ)
-    g.fillStyle = '#e0c98f'; g.fillRect(0, W2S(city.beachZ), S, S - W2S(city.beachZ));
-    g.fillStyle = '#1e6f9e'; g.fillRect(0, W2S(city.beachZ + 34), S, S - W2S(city.beachZ + 34));
+    g.fillStyle = '#e6cf95'; g.fillRect(0, W2S(city.beachZ), S, S - W2S(city.beachZ));
+    g.fillStyle = '#1a6f8e'; g.fillRect(0, W2S(city.beachZ + 34), S, S - W2S(city.beachZ + 34));
     // boardwalk strip along the beach
-    g.fillStyle = '#7a5a38'; g.fillRect(0, W2S(city.beachZ - 6), S, 8 / 800 * S);
+    g.fillStyle = '#6a4a28'; g.fillRect(0, W2S(city.beachZ - 6), S, 8 / 800 * S);
     // roads
-    g.fillStyle = '#33373e';
+    g.fillStyle = '#2e323a';
     for (let i = -HB; i <= HB; i++) {
       const c = i * P;
       g.fillRect(0, W2S(c - R / 2), S, R / 800 * S);
       g.fillRect(W2S(c - R / 2), 0, R / 800 * S, S);
     }
     // centre dashes
-    g.fillStyle = '#f5d76e';
+    g.fillStyle = '#ffd76e';
     for (let i = -HB; i <= HB; i++) {
       const c = i * P;
       for (let d = -380; d < 380; d += 24) {
@@ -242,13 +251,13 @@
         g.fillRect(W2S(c) - 1.5, W2S(d), 3, 12 / 800 * S);
       }
     }
-    // crosswalks at intersections
-    g.fillStyle = 'rgba(255,255,255,0.75)';
+    // wider crosswalks at intersections
+    g.fillStyle = 'rgba(255,255,255,0.8)';
     for (let i = -HB; i <= HB; i++) for (let j = -HB; j <= HB; j++) {
       const x = i * P, z = j * P;
-      for (let k = -3; k <= 3; k++) {
-        g.fillRect(W2S(x + k * 2 - 0.7), W2S(z - R / 2), 1.4 / 800 * S, 3 / 800 * S);
-        g.fillRect(W2S(x + k * 2 - 0.7), W2S(z + R / 2 - 3), 1.4 / 800 * S, 3 / 800 * S);
+      for (let k = -4; k <= 4; k++) {
+        g.fillRect(W2S(x + k * 2 - 0.8), W2S(z - R / 2), 1.6 / 800 * S, 4 / 800 * S);
+        g.fillRect(W2S(x + k * 2 - 0.8), W2S(z + R / 2 - 4), 1.6 / 800 * S, 4 / 800 * S);
       }
     }
     const tex = new THREE.CanvasTexture(cv);
@@ -263,12 +272,12 @@
     const g = cv.getContext('2d');
     g.fillStyle = '#' + baseColor.toString(16).padStart(6, '0');
     g.fillRect(0, 0, 128, 256);
-    const rng = SB.RNG.make(baseColor * 7919 + 13);
-    for (let y = 12; y < 244; y += 22) {
-      for (let x = 10; x < 118; x += 20) {
-        const lit = rng.next() < (litRatio || 0.35);
+    const rng = SB.RNG.make(baseColor * 104729 + 7);
+    for (let y = 10; y < 246; y += 20) {
+      for (let x = 8; x < 120; x += 18) {
+        const lit = rng.next() < (litRatio || 0.4);
         g.fillStyle = lit ? '#ffd76a' : '#1c2733';
-        g.fillRect(x, y, 12, 14);
+        g.fillRect(x, y, 11, 13);
       }
     }
     const tex = new THREE.CanvasTexture(cv);
