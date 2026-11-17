@@ -1,5 +1,8 @@
-// Procedural city of Solmar Bay: grid roads, building blocks, park, beach,
-// pier, and the named landmarks the missions use. Deterministic from the seed.
+// Procedural city of Solmar Bay: grid roads, building blocks, parks, plazas,
+// beach, boardwalk, pier, and the named landmarks the missions use.
+// Rebuild r2: same 9x9 grid and landmark plots as v1 (missions depend on
+// them), but re-laid out — plaza blocks, a neon strip, traffic lights,
+// billboards, a boardwalk and a helipad on Kingfish Tower.
 (function () {
   'use strict';
   window.SB = window.SB || {};
@@ -7,36 +10,72 @@
 
   function roadCoord(i) { return i * CFG.pitch; } // centre line of road i
 
+  // Landmark plots, by block index (bx,bz in -4..3).
+  const LANDMARKS = [
+    { plot: '0,0', name: 'KINGFISH TOWER', w: 30, d: 30, h: 72, color: 0x2a2f45, heli: true },
+    { plot: '-4,3', name: 'MAMA LOU’S DINER', w: 22, d: 18, h: 12, color: 0xb08a6a },
+    { plot: '3,-4', name: 'SOLMAR DOCKS', w: 26, d: 20, h: 10, color: 0x6f7f8a },
+    { plot: '-3,-4', name: 'CHOP SHOP', w: 24, d: 18, h: 9, color: 0x8a6f8a },
+    { plot: '3,3', name: 'ST. MARIA HOSPITAL', w: 24, d: 20, h: 16, color: 0xe8e8e8 },
+    { plot: '-4,-4', name: 'HIDEOUT', w: 18, d: 16, h: 9, color: 0x5f7f6f },
+  ];
+  const LANDMARK_PLOTS = {};
+  for (const lm of LANDMARKS) LANDMARK_PLOTS[lm.plot] = lm;
+
   SB.City = {
     build: function (seed) {
       const rng = SB.RNG.make(seed);
       const city = {
-        buildings: [],   // {x, z, w, d, h, color, roof, name?}
+        buildings: [],   // {x, z, w, d, h, color, roof, name?, heli?}
         trees: [],       // {x, z, s}
         lamps: [],       // {x, z}
         parks: [],       // {x, z, w, d}
+        plazas: [],      // {x, z, w, d} — paved squares with benches
+        lights: [],      // {x, z} traffic-light intersections
+        billboards: [],  // {x, z, angle, hue}
         colliders: [],   // AABBs {minX, maxX, minZ, maxZ} — buildings + props
         parkedSpots: [], // {x, z, angle}
         roadLines: [],   // road centre lines, for minimap + traffic
+        coins: [],       // {x, z} neon coin pickups
       };
       const P = CFG.pitch, B = CFG.block, R = CFG.road, HB = CFG.halfBlocks;
+
       // Road centre lines: -4..+4 in both axes.
       for (let i = -HB; i <= HB; i++) {
         city.roadLines.push({ x1: roadCoord(-HB) - R / 2 - B, z1: roadCoord(i), x2: roadCoord(HB) + R / 2 + B, z2: roadCoord(i), horiz: true });
         city.roadLines.push({ x1: roadCoord(i), z1: roadCoord(-HB) - R / 2 - B, x2: roadCoord(i), z2: roadCoord(HB) + R / 2 + B, horiz: false });
+        // traffic lights at the four inner intersections of each ring road
+        if (i !== 0 && Math.abs(i) < HB) {
+          city.lights.push({ x: roadCoord(i), z: roadCoord(0) });
+          city.lights.push({ x: roadCoord(0), z: roadCoord(i) });
+        }
       }
-      // Blocks: each grid cell between roads gets buildings, a park, or stays empty.
+
+      // Blocks: each grid cell between roads gets buildings, a park, a plaza, or stays empty.
       for (let bx = -HB; bx < HB; bx++) {
         for (let bz = -HB; bz < HB; bz++) {
           const cx = (bx + 0.5) * P, cz = (bz + 0.5) * P;
-          // Reserve landmark plots (see below); skip them here.
-          if (isLandmarkPlot(bx, bz)) continue;
+          const lm = LANDMARK_PLOTS[bx + ',' + bz];
+          if (lm) { // landmark plot
+            const b = { x: cx, z: cz, w: lm.w, d: lm.d, h: lm.h, color: lm.color, roof: 0x333333, name: lm.name, heli: !!lm.heli };
+            city.buildings.push(b);
+            city.colliders.push({ minX: cx - lm.w / 2, maxX: cx + lm.w / 2, minZ: cz - lm.d / 2, maxZ: cz + lm.d / 2 });
+            continue;
+          }
           const roll = rng.next();
-          if (roll < 0.14) {
+          if (roll < 0.12) {
             // Park block.
             city.parks.push({ x: cx, z: cz, w: B, d: B });
             for (let t = 0; t < 7; t++) {
               city.trees.push({ x: cx + rng.range(-B / 2 + 6, B / 2 - 6), z: cz + rng.range(-B / 2 + 6, B / 2 - 6), s: rng.range(0.8, 1.4) });
+            }
+            continue;
+          }
+          if (roll < 0.2) {
+            // Plaza block: paved square, benches, two trees.
+            city.plazas.push({ x: cx, z: cz, w: B, d: B });
+            for (let t = 0; t < 2; t++) {
+              city.trees.push({ x: cx + rng.range(-B / 2 + 8, B / 2 - 8), z: cz + rng.range(-B / 2 + 8, B / 2 - 8), s: rng.range(0.9, 1.2) });
             }
             continue;
           }
@@ -54,13 +93,13 @@
           if (rng.chance(0.5)) city.trees.push({ x: cx + rng.range(-20, 20), z: cz + rng.range(-20, 20), s: rng.range(0.8, 1.3) });
         }
       }
-      // Landmarks (fixed plots, original names).
-      addLandmark(city, 0, 0, 'KINGFISH TOWER', 30, 30, 72, 0x2a2f45);   // centre block
-      addLandmark(city, -4, 3, 'MAMA LOU’S DINER', 22, 18, 12, 0xb08a6a); // west edge
-      addLandmark(city, 3, -4, 'SOLMAR DOCKS', 26, 20, 10, 0x6f7f8a);    // north-east
-      addLandmark(city, -3, -4, 'CHOP SHOP', 24, 18, 9, 0x8a6f8a);       // north-west
-      addLandmark(city, 3, 3, 'ST. MARIA HOSPITAL', 24, 20, 16, 0xe8e8e8); // south-east
-      addLandmark(city, -4, -4, 'HIDEOUT', 18, 16, 9, 0x5f7f6f);         // north-west corner
+
+      // Neon Row: billboards along the central north-south road.
+      for (let i = 0; i < 8; i++) {
+        const z = roadCoord(rng.int(-3, 3)) + rng.range(-20, 20);
+        city.billboards.push({ x: rng.chance(0.5) ? 10 : -10, z: z, angle: rng.chance(0.5) ? 0 : Math.PI, hue: rng.pick([0xff2d78, 0x2dd4ff, 0xffe14d, 0x7dff5e]) });
+      }
+
       // Street lamps along roads.
       for (let i = -HB; i <= HB; i++) {
         for (let j = -HB; j < HB; j++) {
@@ -75,6 +114,17 @@
         if (horiz) city.parkedSpots.push({ x: along, z: road + (rng.chance(0.5) ? 5.5 : -5.5), angle: rng.chance(0.5) ? 0 : Math.PI });
         else city.parkedSpots.push({ x: road + (rng.chance(0.5) ? 5.5 : -5.5), z: along, angle: rng.chance(0.5) ? Math.PI / 2 : -Math.PI / 2 });
       }
+      // Neon coins: hidden around the city (rooftop-adjacent streets, parks, pier).
+      const coinSpots = [];
+      for (let i = 0; i < CFG.coinsTotal; i++) {
+        const node = { x: rng.int(-HB, HB) * P, z: rng.int(-HB, HB) * P };
+        coinSpots.push({ x: node.x + rng.range(-24, 24), z: node.z + rng.range(-24, 24) });
+      }
+      for (const c of coinSpots) {
+        const fixed = H2.collideCircle(city, c.x, c.z, 1);
+        city.coins.push({ x: fixed.x, z: fixed.z });
+      }
+
       // Named places (world coordinates, used by missions + HUD).
       city.places = {
         tower: { x: 40, z: 40, label: 'Kingfish Tower' },
@@ -92,22 +142,8 @@
     },
   };
 
-  function isLandmarkPlot(bx, bz) {
-    // (bx,bz) are block indices -4..3; landmark plots by their block.
-    const key = bx + ',' + bz;
-    return ['0,0', '-4,3', '3,-4', '-3,-4', '3,3', '-4,-4'].includes(key);
-  }
-  function addLandmark(city, bx, bz, name, w, d, h, color) {
-    const P = CFG.pitch;
-    const x = (bx + 0.5) * P, z = (bz + 0.5) * P;
-    const b = { x: x, z: z, w: w, d: d, h: h, color: color, roof: 0x333333, name: name };
-    city.buildings.push(b);
-    city.colliders.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 });
-  }
-
-  // ---- collision + road helpers (shared by world + traffic AI) ----
-  SB.CityHelpers = {
-    // Push a circle out of building AABBs; returns corrected {x, z}.
+  // Local alias so the coin placement above can use the helpers defined below.
+  const H2 = {
     collideCircle: function (city, x, z, r) {
       for (const c of city.colliders) {
         const nx = Math.max(c.minX, Math.min(x, c.maxX));
@@ -119,7 +155,6 @@
             const d = Math.sqrt(d2);
             x = nx + (dx / d) * r; z = nz + (dz / d) * r;
           } else {
-            // centre inside the box: push out along the smallest penetration axis
             const pl = x - c.minX, pr = c.maxX - x, pt = z - c.minZ, pb = c.maxZ - z;
             const m = Math.min(pl, pr, pt, pb);
             if (m === pl) x = c.minX - r; else if (m === pr) x = c.maxX + r;
@@ -129,6 +164,12 @@
       }
       return { x: x, z: z };
     },
+  };
+
+  // ---- collision + road helpers (shared by world + traffic AI) ----
+  SB.CityHelpers = {
+    // Push a circle out of building AABBs; returns corrected {x, z}.
+    collideCircle: function (city, x, z, r) { return H2.collideCircle(city, x, z, r); },
     clampCity: function (x, z, margin) {
       const m = CFG.cityHalf + (margin || 0);
       return { x: Math.max(-m, Math.min(m, x)), z: Math.max(-m, Math.min(m + 60, z)) };
@@ -144,9 +185,9 @@
     },
     // Nearest point on the road network (snaps to nearest road centre line).
     snapToRoad: function (x, z) {
-      const P = CFG.pitch, HB = CFG.halfBlocks;
+      const P = CFG.pitch;
       let best = null, bd = Infinity;
-      for (let i = -HB; i <= HB; i++) {
+      for (let i = -CFG.halfBlocks; i <= CFG.halfBlocks; i++) {
         const c = i * P;
         const d1 = Math.abs(z - c), d2 = Math.abs(x - c);
         if (d1 < bd) { bd = d1; best = { x: x, z: c, horiz: true }; }
@@ -155,6 +196,14 @@
       return best;
     },
     dist: function (ax, az, bx, bz) { const dx = ax - bx, dz = az - bz; return Math.sqrt(dx * dx + dz * dz); },
+    angleTo: function (ax, az, bx, bz) { return Math.atan2(bx - ax, bz - az); },
+    // shortest signed angle difference, wrapped to [-PI, PI]
+    angleDiff: function (a, b) {
+      let d = b - a;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      return d;
+    },
   };
 
   // ---- ground texture: roads, sidewalks, lane dashes, beach, water edge ----
@@ -167,12 +216,16 @@
     const P = CFG.pitch, R = CFG.road, HB = CFG.halfBlocks;
     // base: sidewalks grey
     g.fillStyle = '#8d9299'; g.fillRect(0, 0, S, S);
-    // parks green
+    // parks green, plazas paved light
     g.fillStyle = '#4f8f3a';
     for (const p of city.parks) g.fillRect(W2S(p.x - p.w / 2), W2S(p.z - p.d / 2), p.w / 800 * S, p.d / 800 * S);
+    g.fillStyle = '#b9b3a4';
+    for (const p of city.plazas) g.fillRect(W2S(p.x - p.w / 2), W2S(p.z - p.d / 2), p.w / 800 * S, p.d / 800 * S);
     // beach + water (south edge, z > beachZ)
     g.fillStyle = '#e0c98f'; g.fillRect(0, W2S(city.beachZ), S, S - W2S(city.beachZ));
     g.fillStyle = '#1e6f9e'; g.fillRect(0, W2S(city.beachZ + 34), S, S - W2S(city.beachZ + 34));
+    // boardwalk strip along the beach
+    g.fillStyle = '#7a5a38'; g.fillRect(0, W2S(city.beachZ - 6), S, 8 / 800 * S);
     // roads
     g.fillStyle = '#33373e';
     for (let i = -HB; i <= HB; i++) {

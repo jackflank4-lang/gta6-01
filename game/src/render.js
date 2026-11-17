@@ -1,17 +1,25 @@
 // three.js scene for Solmar Bay: ground, buildings, props, vehicles, people,
 // camera follow, and the 2D minimap. No external assets — textures are canvas-made.
+// Rebuild r2: three camera modes (follow / shoulder / high), a dusk sky that
+// shifts with play time, traffic lights, neon billboards, a boardwalk,
+// a helipad on Kingfish Tower, spinning coin pickups and damage smoke.
 (function () {
   'use strict';
   window.SB = window.SB || {};
   const CFG = SB.CFG;
+
+  const CAMERA_MODES = ['FOLLOW', 'SHOULDER', 'HIGH'];
 
   const Render = {
     scene: null, camera: null, renderer: null, canvas: null,
     city: null, facadeCache: {},
     playerMesh: null, carMeshes: new Map(), pedMeshes: new Map(),
     markerMesh: null, markerRing: null, beaconLight: null,
-    camYaw: 0, camPitch: 0.30, camDist: 22,
+    camYaw: 0, camPitch: 0.30, camDist: 22, camZoom: 0, camOrbit: 0,
+    cameraMode: 0,
     tracer: null, muzzle: null,
+    trafficLights: [], coinMeshes: [], smokePuffs: [],
+    sunLight: null, hemiLight: null,
 
     init: function (canvas, city) {
       this.canvas = canvas;
@@ -24,17 +32,19 @@
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       this.resize();
 
-      // Lighting: warm afternoon sun + sky bounce.
-      const hemi = new THREE.HemisphereLight(0xbfd9ff, 0x8a6a4a, 0.95);
-      this.scene.add(hemi);
-      const sun = new THREE.DirectionalLight(0xffe6b0, 1.5);
-      sun.position.set(180, 260, 120);
-      this.scene.add(sun);
+      // Lighting: warm afternoon sun + sky bounce (dusk shifts these per frame).
+      this.hemiLight = new THREE.HemisphereLight(0xbfd9ff, 0x8a6a4a, 0.95);
+      this.scene.add(this.hemiLight);
+      this.sunLight = new THREE.DirectionalLight(0xffe6b0, 1.5);
+      this.sunLight.position.set(180, 260, 120);
+      this.scene.add(this.sunLight);
       this.scene.add(new THREE.AmbientLight(0xffffff, 0.18));
 
       this.buildGround(city);
       this.buildBuildings(city);
       this.buildProps(city);
+      this.buildTrafficLights(city);
+      this.buildBillboards(city);
       this.buildPier(city);
       this.buildMarker();
       this.buildPlayer();
@@ -66,6 +76,12 @@
       water.rotation.x = -Math.PI / 2;
       water.position.set(0, 0.05, city.beachZ + 34 + 60);
       this.scene.add(water);
+      // Boardwalk planks along the sand.
+      const walk = new THREE.Mesh(
+        new THREE.BoxGeometry(700, 0.4, 8),
+        new THREE.MeshLambertMaterial({ color: 0x7a5a38 }));
+      walk.position.set(0, 0.2, city.beachZ - 2);
+      this.scene.add(walk);
     },
     facade: function (color) {
       if (!this.facadeCache[color]) this.facadeCache[color] = SB.makeFacadeTexture(color, 0.35);
@@ -90,6 +106,20 @@
           sign.scale.set(Math.min(b.w * 0.7, 18), 1.6, 0.4);
           sign.position.set(b.x, b.h + 2.2, b.z - b.d / 2 - 0.4);
           this.scene.add(sign);
+        }
+        if (b.heli) {
+          // helipad: dark disc + H marker on the tower roof
+          const pad = new THREE.Mesh(new THREE.CylinderGeometry(7, 7, 0.4, 20),
+            new THREE.MeshLambertMaterial({ color: 0x222831 }));
+          pad.position.set(b.x, b.h + 0.7, b.z);
+          this.scene.add(pad);
+          const bar1 = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({ color: 0xffe14d }));
+          bar1.scale.set(0.8, 0.2, 5);
+          bar1.position.set(b.x, b.h + 1, b.z);
+          const bar2 = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({ color: 0xffe14d }));
+          bar2.scale.set(3.4, 0.2, 0.8);
+          bar2.position.set(b.x, b.h + 1, b.z);
+          this.scene.add(bar1, bar2);
         }
       }
     },
@@ -121,6 +151,58 @@
         const head = new THREE.Mesh(headGeo, headMat);
         head.position.set(l.x, 6.2, l.z);
         this.scene.add(head);
+      }
+    },
+    buildTrafficLights: function (city) {
+      const poleGeo = new THREE.CylinderGeometry(0.14, 0.14, 7, 6);
+      const poleMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+      const boxGeo = new THREE.BoxGeometry(1.1, 2.6, 0.7);
+      const boxMat = new THREE.MeshLambertMaterial({ color: 0x181818 });
+      for (let i = 0; i < city.lights.length; i++) {
+        const l = city.lights[i];
+        const pole = new THREE.Mesh(poleGeo, poleMat);
+        pole.position.set(l.x + 9, 3.5, l.z + 9);
+        this.scene.add(pole);
+        const box = new THREE.Mesh(boxGeo, boxMat);
+        box.position.set(l.x + 9, 7.4, l.z + 9);
+        this.scene.add(box);
+        const lamps = {};
+        const defs = [
+          ['red', 0xff2d2d, 0.85], ['amber', 0xffb02d, 0], ['green', 0x37d67a, -0.85],
+        ];
+        for (const [name, color, dy] of defs) {
+          const mat = new THREE.MeshBasicMaterial({ color: color });
+          const dot = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 6), mat);
+          dot.position.set(l.x + 9, 7.4 + dy, l.z + 9.4);
+          this.scene.add(dot);
+          lamps[name] = mat;
+        }
+        this.trafficLights.push({ mats: lamps, offset: i * 1.7 });
+      }
+    },
+    buildBillboards: function (city) {
+      const postGeo = new THREE.BoxGeometry(0.5, 9, 0.5);
+      const postMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
+      for (const b of city.billboards) {
+        const g = new THREE.Group();
+        for (const sx of [-3, 3]) {
+          const post = new THREE.Mesh(postGeo, postMat);
+          post.position.set(sx, 4.5, 0);
+          g.add(post);
+        }
+        const panel = new THREE.Mesh(
+          new THREE.BoxGeometry(9, 4, 0.4),
+          new THREE.MeshBasicMaterial({ color: b.hue }));
+        panel.position.set(0, 10, 0);
+        g.add(panel);
+        const stripe = new THREE.Mesh(
+          new THREE.BoxGeometry(9, 0.7, 0.45),
+          new THREE.MeshBasicMaterial({ color: 0xffffff }));
+        stripe.position.set(0, 8.4, 0);
+        g.add(stripe);
+        g.position.set(b.x, 0, b.z);
+        g.rotation.y = b.angle;
+        this.scene.add(g);
       }
     },
     buildPier: function (city) {
@@ -227,6 +309,37 @@
       this.scene.add(g);
       return g;
     },
+    // Foot cop: dark uniform, police cap, badge dot.
+    makeFootCop: function () {
+      const g = this.makePerson(0x1a2a4a);
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.44, 0.16, 10),
+        new THREE.MeshLambertMaterial({ color: 0x101828 }));
+      cap.position.y = 1.88;
+      g.add(cap);
+      const badge = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.06),
+        new THREE.MeshBasicMaterial({ color: 0xffe14d }));
+      badge.position.set(0.2, 1.15, 0.26);
+      g.add(badge);
+      return g;
+    },
+    makeCoin: function (x, z) {
+      const m = new THREE.Mesh(
+        new THREE.TorusGeometry(0.8, 0.28, 8, 16),
+        new THREE.MeshBasicMaterial({ color: SB.PALETTE.coin }));
+      m.position.set(x, 1.1, z);
+      m.rotation.x = Math.PI / 2.4;
+      this.scene.add(m);
+      this.coinMeshes.push(m);
+      return m;
+    },
+    spawnSmoke: function (x, y, z) {
+      const m = new THREE.Mesh(
+        new THREE.SphereGeometry(0.9, 8, 6),
+        new THREE.MeshBasicMaterial({ color: 0x666666, transparent: true, opacity: 0.55 }));
+      m.position.set(x, y, z);
+      this.scene.add(m);
+      this.smokePuffs.push({ mesh: m, life: 0.9 });
+    },
     makeCar: function (color, isPolice) {
       const g = new THREE.Group();
       const bodyMat = new THREE.MeshLambertMaterial({ color: color });
@@ -255,11 +368,17 @@
         g.add(l1, l2);
         g.userData.light1 = l1; g.userData.light2 = l2;
       }
-      // headlights
+      // headlights + taillights
       const hl = new THREE.MeshBasicMaterial({ color: 0xfff6c8 });
       for (const sx of [-0.7, 0.7]) {
         const h = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.18, 0.1), hl);
         h.position.set(sx, 0.65, 2.32);
+        g.add(h);
+      }
+      const tl = new THREE.MeshBasicMaterial({ color: 0xff2d2d });
+      for (const sx of [-0.7, 0.7]) {
+        const h = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.18, 0.1), tl);
+        h.position.set(sx, 0.65, -2.32);
         g.add(h);
       }
       this.scene.add(g);
@@ -300,16 +419,36 @@
       mesh.userData.armL.rotation.x = -s * 0.7;
       mesh.userData.armR.rotation.x = s * 0.7;
     },
-    // Camera: third-person follow behind the player / car, mouse drag orbits.
+    // Camera: three modes. FOLLOW is the v1 chase cam; SHOULDER is a close
+    // over-the-shoulder view; HIGH is a high chase cam. Wheel zooms.
+    setCameraMode: function (mode) {
+      this.cameraMode = ((mode % CAMERA_MODES.length) + CAMERA_MODES.length) % CAMERA_MODES.length;
+      return CAMERA_MODES[this.cameraMode];
+    },
+    cameraModeName: function () { return CAMERA_MODES[this.cameraMode]; },
     updateCamera: function (focus, yaw, dt) {
       this.camOrbit = (this.camOrbit || 0) + SB.Input.dragDX * 0.004;
+      if (SB.Input.wheel) this.camZoom = Math.max(-6, Math.min(10, this.camZoom + SB.Input.wheel * 0.01));
       const targetYaw = yaw + this.camOrbit;
       this.camYaw += (targetYaw - this.camYaw) * Math.min(1, dt * 6);
       this.camPitch = Math.max(0.18, Math.min(0.9, this.camPitch - SB.Input.dragDY * 0.002));
-      const dist = focus.inCar ? 22 : 18;
-      const cx = focus.x - Math.sin(this.camYaw) * Math.cos(this.camPitch) * dist;
-      const cz = focus.z - Math.cos(this.camYaw) * Math.cos(this.camPitch) * dist;
-      const cy = 4 + Math.sin(this.camPitch) * dist;
+      let dist, height, pitch;
+      if (this.cameraMode === 1) { // shoulder
+        dist = 7 + this.camZoom * 0.3;
+        pitch = 0.12;
+        height = 2.6;
+      } else if (this.cameraMode === 2) { // high
+        dist = 30 + this.camZoom;
+        pitch = 0.55;
+        height = 6;
+      } else { // follow
+        dist = (focus.inCar ? 22 : 18) + this.camZoom;
+        pitch = this.camPitch;
+        height = 4;
+      }
+      const cx = focus.x - Math.sin(this.camYaw) * Math.cos(pitch) * dist;
+      const cz = focus.z - Math.cos(this.camYaw) * Math.cos(pitch) * dist;
+      const cy = height + Math.sin(pitch) * dist;
       this.camera.position.set(cx, cy, cz);
       this.camera.lookAt(focus.x, 2.5, focus.z);
     },
@@ -336,12 +475,50 @@
         if (this._tracerT <= 0) this.tracer.visible = false;
       }
     },
-    render: function () {
+    // Dusk sweep: sky, fog and sun drift from afternoon gold to dusk orange
+    // across CFG.duskCycle seconds of play, then hold at dusk.
+    updateSky: function (t) {
+      const k = Math.min(1, (t % CFG.duskCycle) / CFG.duskCycle);
+      const lerp = (a, b) => Math.round(a + (b - a) * k);
+      const sky = new THREE.Color(SB.PALETTE.sky);
+      const dusk = new THREE.Color(SB.PALETTE.skyDusk);
+      sky.r = lerp(sky.r * 255, dusk.r * 255) / 255;
+      sky.g = lerp(sky.g * 255, dusk.g * 255) / 255;
+      sky.b = lerp(sky.b * 255, dusk.b * 255) / 255;
+      this.scene.background = sky;
+      this.scene.fog.color.copy(sky);
+      if (this.sunLight) {
+        this.sunLight.color.setHex(k < 0.5 ? 0xffe6b0 : 0xff9a5a);
+        this.sunLight.intensity = 1.5 - k * 0.45;
+      }
+      if (this.hemiLight) this.hemiLight.intensity = 0.95 - k * 0.25;
+    },
+    render: function (t) {
+      const now = (t === undefined ? 0 : t);
       if (this.ferrisWheel) this.ferrisWheel.rotation.z += 0.0015;
       if (this.markerRing && this.markerRing.visible) {
         const s = 1 + Math.sin(performance.now() / 300) * 0.12;
         this.markerRing.scale.set(s, s, 1);
       }
+      // traffic lights cycle: green 6s, amber 1.5s, red 6s, offset per light
+      for (const tl of this.trafficLights) {
+        const ph = ((now + tl.offset) % 13.5);
+        const on = (c, v) => tl.mats[c].color.setHex(v ? (c === 'red' ? 0xff2d2d : c === 'amber' ? 0xffb02d : 0x37d67a) : 0x331111);
+        on('green', ph < 6);
+        on('amber', ph >= 6 && ph < 7.5);
+        on('red', ph >= 7.5);
+      }
+      // coins spin; smoke puffs rise and fade
+      for (const c of this.coinMeshes) { c.rotation.z += 0.03; c.position.y = 1.1 + Math.sin(now * 2 + c.position.x) * 0.15; }
+      for (let i = this.smokePuffs.length - 1; i >= 0; i--) {
+        const p = this.smokePuffs[i];
+        p.life -= 0.016;
+        p.mesh.position.y += 0.03;
+        p.mesh.scale.multiplyScalar(1.02);
+        p.mesh.material.opacity = Math.max(0, p.life * 0.6);
+        if (p.life <= 0) { this.scene.remove(p.mesh); this.smokePuffs.splice(i, 1); }
+      }
+      this.updateSky(now);
       this.renderer.render(this.scene, this.camera);
     },
     // ---- minimap (2D canvas, north-up, player-centred arrow) ----
@@ -355,9 +532,11 @@
       // water + beach
       g.fillStyle = '#1e6f9e'; g.fillRect(0, toY(world.city.beachZ + 34), S, S);
       g.fillStyle = '#e0c98f'; g.fillRect(0, toY(world.city.beachZ), S, toY(world.city.beachZ + 34) - toY(world.city.beachZ));
-      // parks
+      // parks + plazas
       g.fillStyle = '#4f8f3a';
       for (const p of world.city.parks) g.fillRect(toX(p.x - p.w / 2), toY(p.z - p.d / 2), p.w / (2 * H) * S, p.d / (2 * H) * S);
+      g.fillStyle = '#b9b3a4';
+      for (const p of world.city.plazas) g.fillRect(toX(p.x - p.w / 2), toY(p.z - p.d / 2), p.w / (2 * H) * S, p.d / (2 * H) * S);
       // roads
       g.strokeStyle = '#5a6068'; g.lineWidth = 5;
       for (const r of world.city.roadLines) {
@@ -366,15 +545,23 @@
       // buildings
       g.fillStyle = '#8d9299';
       for (const b of world.city.buildings) g.fillRect(toX(b.x - b.w / 2), toY(b.z - b.d / 2), Math.max(2, b.w / (2 * H) * S), Math.max(2, b.d / (2 * H) * S));
+      // coins (gold dots)
+      g.fillStyle = '#ffe14d';
+      for (const c of world.coins) {
+        if (!c.taken) { g.beginPath(); g.arc(toX(c.x), toY(c.z), 2.5, 0, Math.PI * 2); g.fill(); }
+      }
       // mission marker
       if (world.missionTarget) {
         g.fillStyle = '#ffe14d';
         g.beginPath(); g.arc(toX(world.missionTarget.x), toY(world.missionTarget.z), 6, 0, Math.PI * 2); g.fill();
         g.strokeStyle = '#000'; g.lineWidth = 1.5; g.stroke();
       }
-      // police (red), thugs (orange)
+      // police cars (red), foot cops (blue), thugs (orange)
       for (const c of world.cars) {
         if (c.isPolice) { g.fillStyle = '#ff2d2d'; g.beginPath(); g.arc(toX(c.x), toY(c.z), 3.5, 0, Math.PI * 2); g.fill(); }
+      }
+      for (const f of world.footCops) {
+        if (f.hp > 0) { g.fillStyle = '#2d6dff'; g.beginPath(); g.arc(toX(f.x), toY(f.z), 3, 0, Math.PI * 2); g.fill(); }
       }
       for (const t of world.thugs) {
         if (t.hp > 0) { g.fillStyle = '#ff7b2e'; g.beginPath(); g.arc(toX(t.x), toY(t.z), 3, 0, Math.PI * 2); g.fill(); }
