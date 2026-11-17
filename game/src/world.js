@@ -980,7 +980,10 @@
           else if (m.timer <= 0) this.failMission('The package went stale. Mama Lou is not happy.');
         }
       } else if (this.missionIndex === 4) {
-        this.missionTarget = { x: places.tower.x, z: places.tower.z };
+        // marker at the tower FRONT, not its centre: the beacon column is
+        // hidden inside the building if centred on it, and the crew fights
+        // on the plaza in front anyway.
+        this.missionTarget = { x: places.tower.x, z: places.tower.z + 16 };
         this.updateMarker();
         // completion happens in damageEnemy via kills
       }
