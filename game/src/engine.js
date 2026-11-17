@@ -53,6 +53,7 @@ export class Engine {
     this.city = new City();
     this.scene.add(this.city.group);
     this.vehicles = new Vehicles(this.city);
+    this.traffic = this.vehicles; // alias: the test driver reads __game.traffic
     this.scene.add(this.vehicles.group);
     this.people = new People(this.city);
     this.scene.add(this.people.group);
