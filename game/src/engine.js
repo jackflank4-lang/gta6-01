@@ -452,7 +452,9 @@ export class Game {
     p.taken = true;
     const idx = this.traffic.parked.indexOf(p);
     if (idx >= 0) this.traffic.parked.splice(idx, 1);
-    this.car = { mesh: p.mesh, kind: p.kind, speed: 0, heading: this.hero.heading, damage: 0, isPlayer: true };
+    // The car keeps the heading it was parked at, so it sits along its road.
+    this.car = { mesh: p.mesh, kind: p.kind, speed: 0, heading: p.mesh.rotation.y, damage: 0, isPlayer: true };
+    this.hero.heading = p.mesh.rotation.y;
     this.heroMesh.visible = false;
     this.addWanted(1);
     this.toast('Car stolen — the law is coming');

@@ -148,9 +148,9 @@ export class MissionManager {
     this.clearFarePed();
     const paid = payout > 0 ? ` — $${payout}` : '';
     w.toast(`Mission complete: ${MISSIONS[this.index].name}${paid}${note ? ` (${note})` : ''}`);
-    w.onMissionComplete(this.index);
     this.index += 1;
     this.started = false;
+    w.onMissionComplete(this.index - 1);
     if (!this.done) this.start();
     else w.toast('Story complete — Solmar Bay is yours!');
   }

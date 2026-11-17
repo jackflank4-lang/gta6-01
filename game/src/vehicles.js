@@ -206,7 +206,7 @@ export class Police {
   spawnCruiser() {
     const mesh = makePoliceMesh();
     this.scene.add(mesh);
-    this.cruisers.push({ mesh, speed: 0, heading: 0, stuck: 0 });
+    this.cruisers.push({ mesh, speed: 0, heading: 0, stuck: 0, ramCd: 0 });
   }
 
   spawnFootCop() {
@@ -254,7 +254,8 @@ export class Police {
       while (dh < -Math.PI) dh += Math.PI * 2;
       const turn = Math.max(-2.2 * dt, Math.min(2.2 * dt, dh));
       c.heading += turn;
-      c.speed = Math.min(c.speed + 12 * dt, dist > 25 ? 26 : 20);
+      const closeOnFoot = !playerInCar && dist < 7;
+      c.speed = Math.min(c.speed + 12 * dt, closeOnFoot ? 7 : (dist > 25 ? 26 : 20));
       m.position.x += Math.sin(c.heading) * c.speed * dt;
       m.position.z += Math.cos(c.heading) * c.speed * dt;
       m.rotation.y = c.heading;
@@ -264,7 +265,11 @@ export class Police {
       const on = Math.floor(this.flashT * 4) % 2 === 0;
       if (bar) bar.material.color.setHex(on ? 0xff2222 : 0x881111);
       if (bar2) bar2.material.color.setHex(on ? 0x111188 : 0x2244ff);
-      if (dist < 3.4) onRam(c, dist);
+      c.ramCd -= dt;
+      if (dist < 3.4 && c.ramCd <= 0) {
+        c.ramCd = 1.2;
+        onRam(c, dist);
+      }
     }
     for (const cop of this.footCops) {
       const m = cop.mesh;
