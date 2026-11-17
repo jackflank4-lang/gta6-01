@@ -584,14 +584,15 @@ export class Engine {
       hero.heading += Math.max(-10 * dt, Math.min(10 * dt, dh));
       hero.walkPhase += speed * dt * 2.2;
     }
-    // Jump.
+    // Jump. Exact kinematic update (y += vy*dt - 0.5*g*dt^2) so the peak
+    // height is the same at any frame rate, even with the dt clamp.
     if (this.input.wasPressed('Space') && hero.onGround) {
-      hero.vy = 7;
+      hero.vy = 6;
       hero.onGround = false;
     }
     if (!hero.onGround) {
-      hero.vy -= 25 * dt;
-      hero.y += hero.vy * dt;
+      hero.y += hero.vy * dt - 0.5 * 16 * dt * dt;
+      hero.vy -= 16 * dt;
       if (hero.y <= 0) {
         hero.y = 0;
         hero.vy = 0;
