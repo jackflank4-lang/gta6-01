@@ -1,4 +1,4 @@
-// Solmar Bay — Neon Heat (gta6-01 entry, rebuild r2, Node 22, stdlib only).
+// Solmar Bay — Neon Heat (gta6-01 entry, rebuild r3, Node 22, stdlib only).
 //
 // The game is this directory's game/ folder: plain static files a desktop
 // browser loads offline (game/index.html plus its classic scripts, three.js
@@ -7,14 +7,15 @@
 // to /output and writes /output/dossier.json, the summary the judge reads,
 // through the vendored make.fun library.
 //
-// The game itself: a 3D open-world crime game — a procedural city with
-// plazas, traffic lights and neon billboards; on-foot and driving play with
-// three camera modes; traffic that honks and overtakes, pedestrians, foot
-// cops and police cars under a 0–5 wanted level; car damage with Chop Shop
-// repair; 5 story missions; punch + pistol combat; a HUD with minimap,
-// damage bar, coin counter and dusk clock; start / pause / save; and
-// synthesised WebAudio sound with a two-track radio. Screenshots live in
-// screenshots/ (the first by name is the cover).
+// The game itself: a 3D open-world crime game — a procedural city with a
+// casino, marina boats, plazas, traffic lights and neon billboards; on-foot
+// play with jumping and driving with horns and headlights; three camera
+// modes; traffic that honks and overtakes, pedestrians, foot cops and police
+// cars under a 0–5 wanted level; car damage with Chop Shop repair; 5 story
+// missions; punch + pistol combat; a HUD with minimap, damage bar, coin
+// counter and dusk clock; start / pause / save; and synthesised WebAudio
+// sound with a three-track radio. Screenshots live in screenshots/ (the
+// first by name is the cover).
 //
 // Serve it locally with `node serve.ts`, then open the printed local address.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
@@ -25,13 +26,22 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
-// Resolve the entry directory (this file's folder) and the output directory.
+// Where the entry lives (this file's folder) and where the output goes.
 const entryDir = fileURLToPath(new URL('.', import.meta.url));
 const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+
 const gameDir = join(entryDir, 'game');
 const shotsDir = join(entryDir, 'screenshots');
 
-function stage() {
+const DOSSIER_CAPS = {
+  text_max_bytes: 163840,
+  screenshots: { max: 4, max_bytes: 262144 },
+  game_max_files: 993,
+  game_max_bytes: 50331648,
+  game_path_max_bytes: 1000,
+};
+
+function copyEntry() {
   mkdirSync(outDir, { recursive: true });
   cpSync(gameDir, join(outDir, 'game'), { recursive: true });
   mkdirSync(join(outDir, 'screenshots'), { recursive: true });
@@ -45,15 +55,9 @@ function writeDossier() {
   // 48 MiB of game files in all, or a path under game/ over 1000 bytes
   // (game/ counts beside /output's own 1000-entry cap, its screenshots/
   // and dossier.json).
-  const dossier = buildDossier(outDir, {
-    text_max_bytes: 163840,
-    screenshots: { max: 4, max_bytes: 262144 },
-    game_max_files: 993,
-    game_max_bytes: 50331648,
-    game_path_max_bytes: 1000,
-  });
+  const dossier = buildDossier(outDir, DOSSIER_CAPS);
   writeFileSync(join(outDir, 'dossier.json'), dossier);
 }
 
-stage();
+copyEntry();
 writeDossier();

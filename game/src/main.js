@@ -1,8 +1,8 @@
 // Boot + main loop + HUD + menus + save + deterministic ?shot= scenes.
-// Rebuild r2: same skeleton as v1, reorganised — the controls list is built
-// from the input bindings table, the HUD gains a car-damage bar, a coin
-// counter and a dusk clock, C cycles the camera and N switches radio track,
-// and the shot scenes are restaged (eastbound drive, tower finale).
+// Rebuild r3: the HUD is split into small updaters (bars, stars, objective,
+// hints), L toggles the headlights, the hint line teaches the new keys
+// (jump, horn, headlights), and the shot scenes are restaged from further
+// west so more of Neon Row reads in the drive and chase frames.
 (function () {
   'use strict';
   window.SB = window.SB || {};
@@ -63,7 +63,7 @@
     const save = world.load();
     if (save) world.applySave(save);
     setScreen('play');
-    toast('WELCOME TO SOLMAR BAY', 'Mama Lou has a job for you. Follow the yellow marker.');
+    toast('WELCOME TO SOLMAR BAY', 'Mama Lou has a job for you. Follow the yellow marker — and mind the PD.');
   }
   $('startbtn').addEventListener('click', startGame);
   $('resumebtn').addEventListener('click', () => { SB.Audio.click(); setScreen('play'); });
@@ -82,7 +82,7 @@
   (function () {
     const save = world.load();
     if (save) {
-      $('menunote').textContent = 'Save found: $' + save.money + ' · mission ' + Math.min(save.missionIndex + 1, 5) + '/5 · ' + (save.coinsGot || 0) + '/10 coins · your progress continues.';
+      $('menunote').textContent = 'Save found: $' + save.money + ' · mission ' + Math.min(save.missionIndex + 1, 5) + '/5 · ' + (save.coinsGot || 0) + '/12 coins · your progress continues.';
     }
   })();
 
@@ -120,19 +120,22 @@
     if (h > 12) h -= 12;
     return h + ':' + String(m).padStart(2, '0') + ' ' + ap;
   }
-  function updateHUD() {
+  function updateBars() {
     const p = world.player;
     $('money').textContent = '$' + Math.round(p.money).toLocaleString('en-US');
     $('healthbar').style.width = Math.max(0, p.health) + '%';
     $('healthbar').style.background = p.health > 50 ? 'linear-gradient(90deg,#37d67a,#7dff5e)' : 'linear-gradient(90deg,#ff3b30,#ff9500)';
     $('ammo').textContent = p.inCar ? '' : ('AMMO ' + p.ammo + '  ·  F punch · Click shoot');
     $('coins').textContent = 'COINS ' + world.coinsGot + '/' + CFG.coinsTotal + '  ·  ' + clockText();
-    // stars
+  }
+  function updateStars() {
     let stars = '';
     for (let i = 0; i < 5; i++) stars += i < world.wanted ? '★' : '<span class="off">★</span>';
     $('stars').innerHTML = stars;
     if (world.wanted > 0) show($('wantedlabel')); else hide($('wantedlabel'));
-    // car damage bar (only while driving)
+  }
+  function updateCarBar() {
+    const p = world.player;
     const car = p.inCar ? world.cars.find((c) => c.id === p.carId) : null;
     if (car) {
       show($('carwrap'));
@@ -141,7 +144,9 @@
       $('carbar').style.background = left > 60 ? 'linear-gradient(90deg,#37d67a,#7dff5e)' : left > 25 ? 'linear-gradient(90deg,#ffb02d,#ffe14d)' : 'linear-gradient(90deg,#ff3b30,#ff9500)';
       $('carlabel').textContent = 'CAR ' + Math.round(left) + '% — hold H at the Chop Shop to repair';
     } else hide($('carwrap'));
-    // objective
+    return car;
+  }
+  function updateObjective() {
     const obj = $('objective');
     if (world.mission) {
       const m = world.mission;
@@ -155,6 +160,9 @@
       obj.innerHTML = '<span class="mname">FREE ROAM</span><br>Solmar Bay is yours. Steal cars, dodge the PD, have fun.';
       show(obj);
     } else hide(obj);
+  }
+  function updateHints(car) {
+    const p = world.player;
     // speedo
     if (p.inCar) {
       show($('speedo'));
@@ -164,21 +172,30 @@
     const hint = $('hint');
     if (!p.inCar) {
       const car2 = world.nearestCar(4.5);
-      if (car2) { hint.textContent = 'Press E to get in the car' + (car2.driver === 'traffic' ? ' (it has a driver…)' : ''); show(hint); }
-      else hide(hint);
+      if (car2) { hint.textContent = 'Press E to get in the car' + (car2.driver === 'traffic' ? ' (it has a driver…)' : '') + ' · SPACE to jump'; show(hint); }
+      else hint.textContent = 'WASD walk · SHIFT sprint · SPACE jump';
     } else {
       const nearChop = world.city.places.chopshop;
       const d = SB.CityHelpers.dist(p.x, p.z, nearChop.x, nearChop.z);
-      hint.textContent = d < 14 && car && car.damage > 0 ? 'Hold H — repair ($1.50 per point)' : 'E — exit car · SPACE — handbrake · C — camera';
+      hint.textContent = d < 14 && car && car.damage > 0 ? 'Hold H — repair ($1.50 per point)' : 'E — exit car · SPACE — handbrake · H — horn · L — headlights';
       show(hint);
     }
     // crosshair when aiming on foot
     if (!p.inCar && (SB.Input.mouseDown || SB.Input.mouseX !== 0)) show($('crosshair')); else hide($('crosshair'));
+  }
+  function updateHUD() {
+    updateBars();
+    updateStars();
+    const car = updateCarBar();
+    updateObjective();
+    updateHints(car);
     // minimap
     SB.Render.drawMinimap($('minimap'), world);
     // status line for screen readers
+    const p = world.player;
     $('status').textContent = 'Money $' + Math.round(p.money) + ', health ' + Math.round(p.health) + ', wanted ' + world.wanted + ' stars' +
-      (world.mission ? ', mission: ' + world.mission.def.name : '');
+      (world.mission ? ', mission: ' + world.mission.def.name : '') +
+      (world.headlights ? ', headlights on' : '');
   }
 
   // ---------- shot staging ----------
@@ -195,10 +212,10 @@
     world.events = [];
     toastTimer = 0; hide($('toast')); hide($('subtoast'));
     if (shot === 'drive' || shot === 'chase') {
-      // Dax in a car on the central east-west road (z=0), driving east
-      // through the city so Neon Row billboards and traffic read in frame.
+      // Dax in a car on the central east-west road (z=0), driving east from
+      // further west so Neon Row billboards and traffic read in frame.
       const car = world.cars.find((c) => c.driver === 'parked');
-      car.x = -80; car.z = 0; car.angle = Math.PI / 2;
+      car.x = -120; car.z = 0; car.angle = Math.PI / 2;
       world.player.x = car.x; world.player.z = car.z;
       world.enterCar(car);
       world.camYaw = Math.PI / 2;
@@ -211,9 +228,9 @@
         // pull two cruisers oncoming ahead of the player and one alongside.
         const cruisers = world.cars.filter((c) => c.isPolice && c.active);
         const stage = [
-          { dx: 48, dz: -14, angle: -Math.PI / 2, speed: 30 },
-          { dx: 68, dz: 14, angle: -Math.PI / 2, speed: 30 },
-          { dx: -24, dz: 16, angle: Math.PI / 2, speed: 34 },
+          { dx: 52, dz: -16, angle: -Math.PI / 2, speed: 32 },
+          { dx: 74, dz: 16, angle: -Math.PI / 2, speed: 32 },
+          { dx: -28, dz: 18, angle: Math.PI / 2, speed: 36 },
         ];
         cruisers.forEach((c, i) => {
           const s = stage[i % stage.length];
@@ -254,7 +271,8 @@
       const p = world.player;
       const car = p.inCar ? world.cars.find((c) => c.id === p.carId) : null;
       return {
-        screen: screen, x: +p.x.toFixed(1), z: +p.z.toFixed(1), angle: +p.angle.toFixed(2),
+        screen: screen, x: +p.x.toFixed(1), z: +p.z.toFixed(1), y: +(p.y || 0).toFixed(2),
+        grounded: !!p.grounded, angle: +p.angle.toFixed(2),
         health: Math.round(p.health), money: Math.round(p.money), ammo: p.ammo,
         inCar: p.inCar, speed: +(p.speed || 0).toFixed(1), wanted: world.wanted,
         mission: world.missionIndex + 1, missionStage: world.mission ? world.mission.stage : null,
@@ -264,6 +282,7 @@
         footCops: world.footCops.filter((f) => !f.dead).length,
         coins: world.coinsGot, coinsTotal: CFG.coinsTotal,
         carDamage: car ? Math.round(car.damage) : null,
+        headlights: world.headlights,
         cameraMode: SB.Render.cameraModeName(),
         track: SB.Audio.trackName(),
         errors: window.__errors.slice(),
@@ -277,6 +296,7 @@
     setWanted: function (n) { world.wanted = 0; world.addWanted(n, true); },
     teleport: function (x, z) { world.player.x = x; world.player.z = z; },
     setCamera: function (m) { world.cameraMode = m; SB.Render.setCameraMode(m); },
+    setHeadlights: function (on) { world.headlights = !!on; SB.Render.setHeadlights(world.headlights); },
   };
 
   // ---------- main loop ----------
@@ -290,7 +310,7 @@
     if (shot) setupShot();
 
     if (screen === 'play') {
-      // camera + radio toggles (edge-triggered)
+      // camera + radio + headlight toggles (edge-triggered)
       if (SB.Input.wasPressed('KeyC')) {
         world.cameraMode = (world.cameraMode + 1) % 3;
         const name = SB.Render.setCameraMode(world.cameraMode);
@@ -299,6 +319,10 @@
       if (SB.Input.wasPressed('KeyN')) {
         const name = SB.Audio.nextTrack();
         toast('RADIO: ' + name, 'N switches the track.');
+      }
+      if (SB.Input.wasPressed('KeyL')) {
+        const on = world.toggleHeadlights();
+        toast(on ? 'HEADLIGHTS ON' : 'HEADLIGHTS OFF', 'L toggles the headlights.');
       }
       // shot autopilot: hold W so the car drives itself for the capture
       if (shot === 'drive' || shot === 'chase') SB.Input.keys['KeyW'] = true;
@@ -316,6 +340,7 @@
       for (const pd of world.peds) if (!pd.dead) SB.Render.syncPerson(pd.mesh, pd, t);
       for (const th of world.thugs) if (th.hp > 0) SB.Render.syncPerson(th.mesh, th, t);
       for (const fc of world.footCops) if (!fc.dead) SB.Render.syncPerson(fc.mesh, fc, t);
+      SB.Render.aimHeadlights(world);
       const focus = world.player;
       SB.Render.updateCamera(focus, world.camYaw, dt);
       updateHUD();

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Solmar Bay — Neon Heat</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1020; font-family: Arial, sans-serif; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0e22; font-family: Arial, sans-serif; }
   #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
   #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .hidden { display: none !important; }
@@ -18,7 +18,7 @@
   #healthbar { background: linear-gradient(90deg, #ff3b30, #ff9500); }
   #carbar { background: linear-gradient(90deg, #37d67a, #7dff5e); }
   .barlabel { font-size: 13px; margin-top: 3px; letter-spacing: 2px; }
-  #ammo { font-size: 18px; margin-top: 4px; color: #ffe14d; }
+  #ammo { font-size: 18px; margin-top: 4px; color: #ffd23c; }
   #coins { font-size: 15px; margin-top: 4px; color: #7df9ff; letter-spacing: 1px; }
   #stars { position: absolute; top: 12px; right: 16px; font-size: 34px; letter-spacing: 6px; color: #ffd60a; }
   #stars .off { color: rgba(255,255,255,.25); }
@@ -26,10 +26,10 @@
   #minimap { position: absolute; left: 14px; bottom: 14px; border: 3px solid rgba(255,255,255,.85); border-radius: 50%; background: #12203a; box-shadow: 0 0 0 3px #000; }
   #speedo { position: absolute; right: 18px; bottom: 16px; text-align: right; }
   #speed { font-size: 44px; color: #fff; }
-  #speedunit { font-size: 13px; letter-spacing: 2px; color: #ffe14d; }
+  #speedunit { font-size: 13px; letter-spacing: 2px; color: #ffd23c; }
   #objective { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); max-width: 560px; text-align: center; font-size: 17px; line-height: 1.35; background: rgba(0,0,0,.55); padding: 8px 16px; border-radius: 8px; }
-  #objective .mname { color: #ffe14d; letter-spacing: 1px; }
-  #toast { position: absolute; top: 34%; left: 50%; transform: translate(-50%, -50%); font-size: 40px; color: #ffe14d; text-align: center; letter-spacing: 2px; }
+  #objective .mname { color: #ffd23c; letter-spacing: 1px; }
+  #toast { position: absolute; top: 34%; left: 50%; transform: translate(-50%, -50%); font-size: 40px; color: #ffd23c; text-align: center; letter-spacing: 2px; }
   #subtoast { position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%); font-size: 19px; color: #fff; text-align: center; font-family: Arial, sans-serif; }
   #hint { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); font-size: 15px; background: rgba(0,0,0,.55); padding: 6px 12px; border-radius: 6px; font-family: Arial, sans-serif; }
   #crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; }
@@ -37,15 +37,15 @@
   #crosshair:before { left: 10px; top: 0; width: 2px; height: 22px; }
   #crosshair:after { left: 0; top: 10px; width: 22px; height: 2px; }
   /* ---------- Menus ---------- */
-  .screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; text-align: center; background: linear-gradient(180deg, rgba(8,10,28,.82), rgba(20,8,40,.88)); z-index: 10; }
-  .screen h1 { font-family: "Arial Black", Arial, sans-serif; font-size: 72px; margin: 0; letter-spacing: 4px; color: #ffe14d; text-shadow: 4px 4px 0 #ff2d78, 8px 8px 0 rgba(0,0,0,.6); }
+  .screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; text-align: center; background: linear-gradient(180deg, rgba(10,10,34,.84), rgba(34,8,44,.9)); z-index: 10; }
+  .screen h1 { font-family: "Arial Black", Arial, sans-serif; font-size: 72px; margin: 0; letter-spacing: 4px; color: #ff5e8a; text-shadow: 4px 4px 0 #2dd4ff, 8px 8px 0 rgba(0,0,0,.6); }
   .screen h2 { font-family: "Arial Black", Arial, sans-serif; font-size: 22px; margin: 6px 0 18px; letter-spacing: 6px; color: #7df9ff; }
-  .screen p { font-size: 16px; line-height: 1.55; max-width: 640px; margin: 8px 0; }
+  .screen p { font-size: 16px; line-height: 1.55; max-width: 660px; margin: 8px 0; }
   .screen .controls { font-size: 15px; line-height: 1.9; background: rgba(0,0,0,.45); padding: 12px 22px; border-radius: 10px; margin: 14px 0; text-align: left; }
-  .screen .controls b { color: #ffe14d; }
-  .bigbtn { font-family: "Arial Black", Arial, sans-serif; font-size: 22px; letter-spacing: 2px; color: #111; background: #ffe14d; border: none; border-radius: 10px; padding: 14px 42px; cursor: pointer; margin-top: 10px; box-shadow: 0 4px 0 #c8a400; }
-  .bigbtn:hover { background: #fff06a; }
-  .bigbtn:active { transform: translateY(3px); box-shadow: 0 1px 0 #c8a400; }
+  .screen .controls b { color: #ffd23c; }
+  .bigbtn { font-family: "Arial Black", Arial, sans-serif; font-size: 22px; letter-spacing: 2px; color: #111; background: #2dd4ff; border: none; border-radius: 10px; padding: 14px 42px; cursor: pointer; margin-top: 10px; box-shadow: 0 4px 0 #0a7a9a; }
+  .bigbtn:hover { background: #6fe6ff; }
+  .bigbtn:active { transform: translateY(3px); box-shadow: 0 1px 0 #0a7a9a; }
   #endsub { font-size: 17px; }
 </style>
 </head>
@@ -81,7 +81,8 @@
   <h2>NEON HEAT</h2>
   <p>You are <b>Dax Marlowe</b>, back in Solmar Bay with empty pockets and a
   debt to the Kingfish crew. Steal cars, run jobs for Mama Lou, dodge the
-  Solmar PD — and take back the city, one mission at a time.</p>
+  Solmar PD — and take back the city, one mission at a time. Jump the curbs,
+  honk the traffic out of your way, and light up the night.</p>
   <div class="controls" id="controls"></div>
   <button class="bigbtn" id="startbtn">START ENGINE</button>
   <p id="menunote" style="font-size:14px;color:#9fd8ff"></p>
