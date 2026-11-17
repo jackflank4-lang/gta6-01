@@ -206,6 +206,20 @@
       if (shot === 'chase') {
         world.addWanted(3, true);
         world.events = [];
+        // stage the pursuit INTO the frame: the PD spawns 70–110 units
+        // away and would still be off-screen when the capture fires, so
+        // pull two cruisers oncoming ahead of the player and one alongside.
+        const cruisers = world.cars.filter((c) => c.isPolice && c.active);
+        const stage = [
+          { dx: 48, dz: -14, angle: -Math.PI / 2, speed: 30 },
+          { dx: 68, dz: 14, angle: -Math.PI / 2, speed: 30 },
+          { dx: -24, dz: 16, angle: Math.PI / 2, speed: 34 },
+        ];
+        cruisers.forEach((c, i) => {
+          const s = stage[i % stage.length];
+          c.x = world.player.x + s.dx; c.z = world.player.z + s.dz;
+          c.angle = s.angle; c.speed = s.speed;
+        });
       }
     } else if (shot === 'mission') {
       // mission 5 in progress at the Tower: Dax south of it facing the
@@ -218,6 +232,10 @@
       world.player.angle = Math.PI;
       world.camYaw = Math.PI;
       SB.Render.camYaw = Math.PI;
+      // HIGH camera for this shot: the tower, the 60-unit mission beacon
+      // rising behind it and the whole crew fit the frame.
+      world.cameraMode = 2;
+      SB.Render.setCameraMode(2);
       const spots = [[-8, 16], [0, 14], [8, 17], [-4, 22], [4, 22], [0, 20]];
       world.thugs.forEach((th, i) => {
         const s = spots[i % spots.length];
