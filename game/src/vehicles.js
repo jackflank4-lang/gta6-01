@@ -230,12 +230,16 @@ export class Vehicles {
 
   // Police pursuit. hero: {x, z, inCar}. onRam(cruiser) fires when a ram
   // lands (engine applies the damage). Cruisers never ram a hero on foot:
-  // they stop 5 m out and the foot cops do the work.
+  // they stop 5 m out and the foot cops do the work. A cruiser with a
+  // pace offset (staged chase screenshots) holds that offset from the hero
+  // instead of converging, so it stays in frame.
   updateCruisers(dt, hero, onRam, time) {
     for (const car of this.cruisers) {
       car.ramCooldown = Math.max(0, (car.ramCooldown || 0) - dt);
-      const dx = hero.x - car.x;
-      const dz = hero.z - car.z;
+      const tx = car.pace ? hero.x + car.pace.dx : hero.x;
+      const tz = car.pace ? hero.z + car.pace.dz : hero.z;
+      const dx = tx - car.x;
+      const dz = tz - car.z;
       const dist = Math.sqrt(dx * dx + dz * dz) || 0.001;
       const wantH = Math.atan2(dx, dz);
       let dh = wantH - car.heading;

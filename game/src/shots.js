@@ -38,10 +38,12 @@ export function stageShot(engine, name) {
     const cruisers = engine.vehicles.cruisers;
     if (cruisers[0]) {
       cruisers[0].x = 36; cruisers[0].z = -45; cruisers[0].heading = 0; cruisers[0].speed = 14;
+      cruisers[0].pace = { dx: -8, dz: 15 };
       cruisers[0].sync();
     }
     if (cruisers[1]) {
       cruisers[1].x = 52; cruisers[1].z = -45; cruisers[1].heading = 0; cruisers[1].speed = 14;
+      cruisers[1].pace = { dx: 8, dz: 15 };
       cruisers[1].sync();
     }
     if (cruisers[2]) engine.vehicles.removeCruiser(cruisers[2]);
