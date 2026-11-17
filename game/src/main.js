@@ -1,134 +1,266 @@
-// Boot and the one loop: input is read every frame, the world advances in fixed 1/60 s steps
-// (several in a slow frame, none in a fast one), and the renderer paints what is there. The game
-// moves between four screens: title, play, paused and game over.
-//
-// ?seed=N fixes the falling pattern. ?shot=start|play|end (with &seed=N) stages that scene
-// instead of running the loop, paints it twice and sets window.__shotReady for a screenshot.
-import { BEST_KEY, LIVES, STEP } from './config.js';
-import { createRandom } from './random.js';
-import { createWorld, EVENT_HIT, EVENT_OVER } from './world.js';
-import { ACTION_CONFIRM, ACTION_PAUSE, createInput } from './input.js';
-import { createRenderer, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
-import { stageShot } from './shots.js';
+// Boot + main loop + HUD + menus + save + deterministic ?shot= scenes.
+(function () {
+  'use strict';
+  window.SB = window.SB || {};
+  const CFG = SB.CFG;
 
-/** The longest frame the loop catches up on; a longer stall (a hidden tab) is dropped, not replayed. */
-const MAX_FRAME = 0.25;
+  const params = new URLSearchParams(window.location.search);
+  const seed = parseInt(params.get('seed') || String(CFG.seed), 10) || CFG.seed;
+  const shot = params.get('shot') || '';
 
-const params = new URLSearchParams(window.location.search);
-const shot = params.get('shot');
-const seedParam = Number.parseInt(params.get('seed') ?? '', 10);
-const seed = Number.isInteger(seedParam) ? seedParam : Math.floor(Math.random() * 4294967296);
+  const $ = (id) => document.getElementById(id);
+  const canvas = $('game');
+  const hud = $('hud'), menuEl = $('menu'), pauseEl = $('pause'), endEl = $('end');
 
-const canvas = document.getElementById('game');
-const status = document.getElementById('status');
-const world = createWorld(createRandom(seed));
-const renderer = createRenderer(canvas);
+  window.__errors = [];
+  window.addEventListener('error', (e) => { window.__errors.push(String(e.message)); });
 
-function readBest() {
-  try {
-    return Number.parseInt(window.localStorage.getItem(BEST_KEY) ?? '0', 10) || 0;
-  } catch {
-    return 0;
+  const city = SB.City.build(seed);
+  SB.Render.init(canvas, city);
+  const world = SB.World.create(city, seed);
+  SB.Input.init(canvas);
+
+  let screen = shot ? 'play' : 'menu'; // shot modes skip the menu
+  let toastTimer = 0;
+  let toastQueue = [];
+  let lastTime = performance.now();
+  let shotSetupDone = false;
+  let frames = 0;
+
+  // ---------- menus ----------
+  function show(el) { el.classList.remove('hidden'); }
+  function hide(el) { el.classList.add('hidden'); }
+  function setScreen(s) {
+    screen = s;
+    world.screen = s;
+    if (s === 'menu') { show(menuEl); hide(pauseEl); hide(endEl); hide(hud); }
+    else if (s === 'pause') { show(pauseEl); }
+    else if (s === 'play') { hide(menuEl); hide(pauseEl); hide(endEl); show(hud); }
+    else if (s === 'busted' || s === 'wasted' || s === 'win') {
+      hide(pauseEl);
+      const ev = world.events.find((e) => e.kind === 'end' || e.kind === 'win');
+      $('endtitle').textContent = s === 'win' ? 'SOLMAR BAY IS YOURS' : (ev ? ev.title : s.toUpperCase());
+      $('endsub').textContent = ev ? ev.sub : '';
+      $('retrybtn').textContent = s === 'win' ? 'KEEP PLAYING' : 'BACK ON THE STREETS';
+      show(endEl);
+    }
   }
-}
-
-function saveBest(value) {
-  try {
-    window.localStorage.setItem(BEST_KEY, String(value));
-  } catch {
-    // Storage can be off (private windows): the best score then lasts this visit only.
-  }
-}
-
-function runShot(name) {
-  const scene = stageShot(name, world);
-  let painted = 0;
-  function paint() {
-    renderer.draw(world.state, scene.screen, scene.best);
-    painted += 1;
-    if (painted < 2) requestAnimationFrame(paint);
-    else window.__shotReady = true;
-  }
-  requestAnimationFrame(paint);
-}
-
-function runGame() {
-  const input = createInput(canvas);
-  let screen = SCREEN_TITLE;
-  let best = readBest();
-  let accumulator = 0;
-  let last = performance.now();
-
-  // Screen readers (and anyone watching the page's text) hear the screen changes and each hit.
-  function announce(message) {
-    status.textContent = message;
-  }
-
   function startGame() {
-    world.reset();
-    accumulator = 0;
-    screen = SCREEN_PLAY;
-    announce(`Playing. ${LIVES} lives.`);
+    SB.Audio.init(); SB.Audio.startMusic(); SB.Audio.click();
+    const save = world.load();
+    if (save) world.applySave(save);
+    setScreen('play');
+    toast('WELCOME TO SOLMAR BAY', 'Mama Lou has a job for you. Follow the yellow marker.');
   }
+  $('startbtn').addEventListener('click', startGame);
+  $('resumebtn').addEventListener('click', () => { SB.Audio.click(); setScreen('play'); });
+  $('quitbtn').addEventListener('click', () => { SB.Audio.click(); world.save(); setScreen('menu'); });
+  $('retrybtn').addEventListener('click', () => {
+    SB.Audio.click();
+    if (screen === 'win') { world.events = world.events.filter((e) => e.kind !== 'win'); setScreen('play'); }
+    else setScreen('play');
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Enter' && screen === 'menu') startGame();
+    if (e.code === 'Enter' && (screen === 'busted' || screen === 'wasted' || screen === 'win')) $('retrybtn').click();
+  });
 
-  function endGame() {
-    screen = SCREEN_OVER;
-    if (world.state.score > best) {
-      best = world.state.score;
-      saveBest(best);
+  // save note on the menu
+  (function () {
+    const save = world.load();
+    if (save) {
+      $('menunote').textContent = 'Save found: $' + save.money + ' · mission ' + Math.min(save.missionIndex + 1, 5) + '/5 · your progress continues.';
     }
-    announce(`Game over. Score ${world.state.score}. Best ${best}.`);
-  }
+  })();
 
-  function handleActions() {
-    const actions = input.takeActions();
-    if (actions & ACTION_CONFIRM && (screen === SCREEN_TITLE || screen === SCREEN_OVER)) startGame();
-    else if (actions & ACTION_PAUSE && screen === SCREEN_PLAY) {
-      screen = SCREEN_PAUSED;
-      announce('Paused.');
-    } else if (actions & (ACTION_PAUSE | ACTION_CONFIRM) && screen === SCREEN_PAUSED) {
-      screen = SCREEN_PLAY;
-      announce('Playing.');
+  // ---------- toasts ----------
+  function toast(text, sub) {
+    $('toast').textContent = text;
+    $('subtoast').textContent = sub || '';
+    show($('toast')); show($('subtoast'));
+    toastTimer = text.indexOf('MISSION') === 0 || text.indexOf('SOLMAR') === 0 ? 4.5 : 2.8;
+  }
+  function drainEvents() {
+    while (world.events.length) {
+      const ev = world.events.shift();
+      if (ev.kind === 'end' || ev.kind === 'win') {
+        setScreen(ev.kind === 'win' ? 'win' : (ev.title === 'BUSTED' ? 'busted' : 'wasted'));
+      } else {
+        toastQueue.push(ev);
+      }
+    }
+    if (toastTimer <= 0 && toastQueue.length) {
+      const ev = toastQueue.shift();
+      toast(ev.text, ev.sub);
     }
   }
 
-  function step() {
-    if (screen === SCREEN_TITLE) {
-      world.step(STEP, 0, true);
+  // ---------- HUD ----------
+  function updateHUD() {
+    const p = world.player;
+    $('money').textContent = '$' + Math.round(p.money).toLocaleString('en-US');
+    $('healthbar').style.width = Math.max(0, p.health) + '%';
+    $('healthbar').style.background = p.health > 50 ? 'linear-gradient(90deg,#37d67a,#7dff5e)' : 'linear-gradient(90deg,#ff3b30,#ff9500)';
+    $('ammo').textContent = p.inCar ? '' : ('AMMO ' + p.ammo + '  ·  F punch · Click shoot');
+    // stars
+    let stars = '';
+    for (let i = 0; i < 5; i++) stars += i < world.wanted ? '★' : '<span class="off">★</span>';
+    $('stars').innerHTML = stars;
+    if (world.wanted > 0) show($('wantedlabel')); else hide($('wantedlabel'));
+    // objective
+    const obj = $('objective');
+    if (world.mission) {
+      const m = world.mission;
+      let extra = '';
+      if (world.missionIndex === 1 || world.missionIndex === 4) extra = '  (' + m.kills + '/' + m.need + ')';
+      if (world.missionIndex === 3 && m.stage === 1) extra = '  — ' + Math.max(0, Math.ceil(m.timer)) + 's left!';
+      if (world.missionIndex === 0 && m.stage === 0) extra = '  — find a car!';
+      obj.innerHTML = '<span class="mname">' + m.def.name + '</span><br>' + m.def.objective + extra;
+      show(obj);
+    } else if (world.freeRoam) {
+      obj.innerHTML = '<span class="mname">FREE ROAM</span><br>Solmar Bay is yours. Steal cars, dodge the PD, have fun.';
+      show(obj);
+    } else hide(obj);
+    // speedo
+    if (p.inCar) {
+      show($('speedo'));
+      $('speed').textContent = Math.round(Math.abs(p.speed || 0) * 2.2);
+    } else hide($('speedo'));
+    // hint
+    const hint = $('hint');
+    if (!p.inCar) {
+      const car = world.nearestCar(4.5);
+      if (car) { hint.textContent = 'Press E to get in the car' + (car.driver === 'traffic' ? ' (it has a driver…)' : ''); show(hint); }
+      else hide(hint);
+    } else { hint.textContent = 'E — exit car · SPACE — handbrake'; show(hint); }
+    // crosshair when aiming on foot
+    if (!p.inCar && (SB.Input.mouseDown || SB.Input.mouseX !== 0)) show($('crosshair')); else hide($('crosshair'));
+    // minimap
+    SB.Render.drawMinimap($('minimap'), world);
+    // status line for screen readers
+    $('status').textContent = 'Money $' + Math.round(p.money) + ', health ' + Math.round(p.health) + ', wanted ' + world.wanted + ' stars' +
+      (world.mission ? ', mission: ' + world.mission.def.name : '');
+  }
+
+  // ---------- shot staging ----------
+  function setupShot() {
+    if (shotSetupDone) return;
+    shotSetupDone = true;
+    if (shot === 'start') {
+      setScreen('menu');
       return;
     }
-    const events = world.step(STEP, input.direction(), false);
-    if (events & EVENT_OVER) endGame();
-    else if (events & EVENT_HIT) announce(world.state.lives === 1 ? 'Hit. 1 life left.' : `Hit. ${world.state.lives} lives left.`);
+    setScreen('play');
+    hide(menuEl); show(hud);
+    if (shot === 'drive' || shot === 'chase') {
+      // put Dax in a parked car on a road, engine running
+      const spot = city.parkedSpots[2];
+      const car = world.cars.find((c) => c.driver === 'parked' && Math.abs(c.x - spot.x) < 1 && Math.abs(c.z - spot.z) < 1)
+        || world.cars.find((c) => c.driver === 'parked');
+      world.player.x = car.x; world.player.z = car.z;
+      world.enterCar(car);
+      world.camYaw = car.angle;
+      SB.Render.camYaw = car.angle;
+      if (shot === 'chase') {
+        world.addWanted(3, true);
+        world.events = [];
+      }
+    } else if (shot === 'mission') {
+      // mission 2 in progress at the docks: thugs closing in
+      world.mission = null;
+      world.startMission(1);
+      world.events = [];
+      const d = city.places.docks;
+      world.player.x = d.x - 14; world.player.z = d.z + 10;
+      world.player.angle = Math.atan2(d.x - world.player.x, d.z - world.player.z);
+      world.camYaw = world.player.angle;
+      SB.Render.camYaw = world.player.angle;
+      for (const t of world.thugs) { t.x = d.x + (Math.random() * 8 - 4); t.z = d.z + (Math.random() * 8 - 4); }
+    }
+    window.__shotReady = true;
   }
 
+  // ---------- debug handle (CDP play-tests) ----------
+  window.__game = {
+    world: world, city: city,
+    screen: () => screen,
+    state: function () {
+      const p = world.player;
+      return {
+        screen: screen, x: +p.x.toFixed(1), z: +p.z.toFixed(1), angle: +p.angle.toFixed(2),
+        health: Math.round(p.health), money: Math.round(p.money), ammo: p.ammo,
+        inCar: p.inCar, speed: +(p.speed || 0).toFixed(1), wanted: world.wanted,
+        mission: world.missionIndex + 1, missionStage: world.mission ? world.mission.stage : null,
+        missionKills: world.mission ? world.mission.kills : 0,
+        cars: world.cars.length, peds: world.peds.length, thugs: world.thugs.filter((t) => t.hp > 0).length,
+        police: world.cars.filter((c) => c.isPolice && c.active).length,
+        errors: window.__errors.slice(),
+      };
+    },
+    press: function (code) { SB.Input.keys[code] = true; SB.Input.pressed[code] = true; setTimeout(() => { SB.Input.keys[code] = false; }, 120); },
+    hold: function (code, on) { SB.Input.keys[code] = !!on; },
+    mouseAt: function (x, y) { SB.Input.mouseX = x; SB.Input.mouseY = y; },
+    mouseDown: function (on) { SB.Input.mouseDown = !!on; },
+    startMission: function (i) { world.startMission(i); },
+    setWanted: function (n) { world.wanted = 0; world.addWanted(n, true); },
+    teleport: function (x, z) { world.player.x = x; world.player.z = z; },
+  };
+
+  // ---------- main loop ----------
   function frame(now) {
     requestAnimationFrame(frame);
-    accumulator += Math.min((now - last) / 1000, MAX_FRAME);
-    last = now;
-    handleActions();
-    if (screen === SCREEN_TITLE || screen === SCREEN_PLAY) {
-      while (accumulator >= STEP && (screen === SCREEN_TITLE || screen === SCREEN_PLAY)) {
-        step();
-        accumulator -= STEP;
+    let dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+    if (dt <= 0) dt = 0.016;
+    frames++;
+
+    if (shot) setupShot();
+
+    if (screen === 'play') {
+      // shot autopilot: hold W so the car drives itself for the capture
+      if (shot === 'drive' || shot === 'chase') SB.Input.keys['KeyW'] = true;
+      world.update(dt, SB.Input);
+      drainEvents();
+      if (world.screen !== 'play') setScreen(world.screen);
+      if (toastTimer > 0) {
+        toastTimer -= dt;
+        if (toastTimer <= 0) { hide($('toast')); hide($('subtoast')); }
       }
+      // sync meshes
+      const t = world.time;
+      SB.Render.syncPlayer(world.player, t);
+      for (const car of world.cars) if (car.active) SB.Render.syncCar(car.mesh, car, t);
+      for (const pd of world.peds) if (!pd.dead) SB.Render.syncPerson(pd.mesh, pd, t);
+      for (const th of world.thugs) if (th.hp > 0) SB.Render.syncPerson(th.mesh, th, t);
+      const focus = world.player;
+      SB.Render.updateCamera(focus, world.camYaw, dt);
+      updateHUD();
+    } else if (screen === 'menu') {
+      SB.Render.vistaCamera(world.time);
+      world.time += dt;
+      SB.Render.syncPlayer(world.player, world.time);
+      for (const car of world.cars) if (car.active) SB.Render.syncCar(car.mesh, car, world.time);
     } else {
-      accumulator = 0;
+      // paused / end screens: keep rendering the frozen scene
+      SB.Render.syncPlayer(world.player, world.time);
     }
-    renderer.draw(world.state, screen, best);
+    SB.Render.render();
+    SB.Input.endFrame();
+    if (frames === 30) window.__shotReady = true;
   }
 
-  // Leaving the tab pauses a running game rather than letting blocks fall unseen.
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && screen === SCREEN_PLAY) {
-      screen = SCREEN_PAUSED;
-      announce('Paused.');
+  // global keys: pause / mute / restart
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    if ((e.code === 'KeyP' || e.code === 'Escape') && screen === 'play') { setScreen('pause'); SB.Audio.click(); }
+    else if ((e.code === 'KeyP' || e.code === 'Escape') && screen === 'pause') { setScreen('play'); SB.Audio.click(); }
+    else if (e.code === 'KeyM') { const m = SB.Audio.toggleMute(); toast(m ? 'MUTED' : 'SOUND ON', ''); }
+    else if (e.code === 'KeyR' && (screen === 'play' || screen === 'pause')) {
+      world.reset(); world.events = []; setScreen('play');
+      toast('FRESH START', 'New day in Solmar Bay.');
     }
   });
 
-  announce('Block Dodger. Press Space or click to start.');
+  if (shot === 'start') setScreen('menu');
   requestAnimationFrame(frame);
-}
-
-if (shot) runShot(shot);
-else runGame();
+})();

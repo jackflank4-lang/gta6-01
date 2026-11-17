@@ -1,61 +1,61 @@
-// Every tuning number and colour in one place. The playfield is a fixed 1280x720 logical area;
-// the renderer scales it to the window, so no rule below depends on the screen size.
-
-export const FIELD = { width: 1280, height: 720, groundY: 664 };
-
-/** The simulation's fixed step, in seconds: 60 updates a second whatever the display's rate. */
-export const STEP = 1 / 60;
-
-export const PLAYER = {
-  width: 72,
-  height: 24,
-  speed: 560,
-  invulnerable: 1.5,
-};
-
-export const LIVES = 3;
-
-export const BLOCK = {
-  minWidth: 40,
-  maxWidth: 110,
-  height: 36,
-  speed: 240,
-  speedPerLevel: 30,
-  speedJitter: 90,
-  interval: 0.55,
-  intervalScale: 0.88,
-  minInterval: 0.14,
-  dodgePoints: 1,
-};
-
-export const COIN = {
-  size: 24,
-  speed: 190,
-  speedPerLevel: 14,
-  interval: 1.4,
-  intervalJitter: 0.8,
-  points: 10,
-};
-
-/** Seconds of play per level, and the last level: speeds and spawn rates stop growing there. */
-export const LEVEL = { seconds: 12, max: 12 };
-
-/** How many falling things can exist at once; the pool is allocated once, at boot. */
-export const POOL_SIZE = 64;
-
-export const PALETTE = {
-  backdrop: '#11141b',
-  sky: '#1b1f2a',
-  ground: '#2a3040',
-  player: '#4fc3f7',
-  block: '#e5534b',
-  coin: '#f2c94c',
-  panel: '#252b38',
-  text: '#eef1f5',
-  muted: '#8b93a3',
-};
-
-export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-
-/** Where the best score is kept between visits (this browser only). */
-export const BEST_KEY = 'block-dodger.best';
+// Solmar Bay — tuning, palette and city constants. All original.
+(function () {
+  'use strict';
+  window.SB = window.SB || {};
+  SB.CFG = {
+    seed: 1337,
+    // city grid
+    block: 64,          // building block side (units)
+    road: 16,           // road width
+    pitch: 80,          // block + road
+    halfBlocks: 4,      // blocks from centre to edge: city spans -4..+4 blocks
+    cityHalf: 4 * 80 + 32, // ~352: half-width of the drivable city
+    // player on foot
+    walkSpeed: 9,
+    runSpeed: 14,
+    playerRadius: 1.1,
+    playerHealth: 100,
+    // car
+    carAccel: 26,
+    carBrake: 40,
+    carMaxSpeed: 46,    // ~100 mph feel
+    carMaxReverse: 14,
+    carTurn: 1.9,
+    carRadius: 2.2,
+    // combat
+    punchDamage: 25,
+    punchRange: 2.6,
+    gunDamage: 34,
+    gunRange: 90,
+    gunAmmoStart: 24,
+    // wanted
+    wantedDecayDist: 70,   // no cop within this for decay
+    wantedDecayTime: 9,    // seconds unseen to drop a star
+    bustDist: 2.4,
+    bustTime: 1.6,
+    // economy
+    startMoney: 150,
+    bustFine: 200,
+    wastedFine: 150,
+    // missions
+    missionRewards: [300, 500, 400, 600, 5000],
+    // traffic / peds
+    trafficCars: 14,
+    peds: 22,
+    pedSpeed: 2.2,
+    trafficSpeed: 13,
+    // world
+    dayLength: 1, // fixed warm afternoon; lighting does not cycle
+  };
+  SB.PALETTE = {
+    sky: 0x87b5e0, fog: 0x9fc3e8,
+    ground: 0x3a3f46, sidewalk: 0x8d9299, roadLine: 0xf5d76e,
+    grass: 0x4f8f3a, sand: 0xe0c98f, water: 0x1e6f9e,
+    building: [0x9a7b5f, 0x7f8ea3, 0xa39a7f, 0x6f7f8a, 0xb08a6a, 0x8a6f8a, 0x5f7f6f, 0xc0a080],
+    roof: [0x4a3f35, 0x5a5a5a, 0x3f4a3f],
+    car: [0xd23c2e, 0x2e6fd2, 0xe8c832, 0x3ac06a, 0xe8e8e8, 0x222222, 0x8a4fd2, 0xe07b2e],
+    police: 0x1a2a4a, policeLight: 0xff2d2d,
+    playerShirt: 0xffe14d, playerPants: 0x2a3a5a, playerSkin: 0xc98a5a,
+    pedShirt: [0xd26a6a, 0x6ad28a, 0x6a8ad2, 0xd2c06a, 0xb06ad2, 0x6ad2c8, 0xe8e8e8, 0x444444],
+  };
+})();
