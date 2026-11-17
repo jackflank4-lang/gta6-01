@@ -474,25 +474,29 @@ export class Game {
         const on = this.playerCar.toggleHeadlights();
         this.toast(on ? 'Headlights on' : 'Headlights off');
       }
-      // Repair at Rosa's Garage: drive into the bay and the car is fixed.
-      const garage = this.city.garage;
-      const carPos = this.playerCar.pos;
-      if (carPos && Math.hypot(carPos.x - garage.x, carPos.z - garage.z) < 9 && this.playerCar.damage > 0) {
-        this.playerCar.repair();
-        this.sound.pickup();
-        this.toast('Rosa\'s Garage — car repaired, on the house');
+      // Still driving? The E press above may have stepped out — the
+      // driving-only tail below must not run with a null car mesh.
+      if (this.inCar) {
+        // Repair at Rosa's Garage: drive into the bay and the car is fixed.
+        const garage = this.city.garage;
+        const carPos = this.playerCar.pos;
+        if (carPos && Math.hypot(carPos.x - garage.x, carPos.z - garage.z) < 9 && this.playerCar.damage > 0) {
+          this.playerCar.repair();
+          this.sound.pickup();
+          this.toast('Rosa\'s Garage — car repaired, on the house');
+        }
+        this.playerCar.update(dt, this.input, this.city, this.traffic);
+        this.crowd.scare(this.playerCar.pos, Math.abs(this.playerCar.speed) > 12 ? 12 : 0);
+        if (this.playerCar.damage >= 100 && this.wanted > 0) {
+          this.bust(150 * this.wanted);
+          return;
+        }
+        if (this.playerCar.damage >= 100) {
+          this.toast('Your ride is totalled — get out and find another');
+          this.playerCar.damage = 99;
+        }
+        this.sound.engine(true, Math.abs(this.playerCar.speed) / 40);
       }
-      this.playerCar.update(dt, this.input, this.city, this.traffic);
-      this.crowd.scare(this.playerCar.pos, Math.abs(this.playerCar.speed) > 12 ? 12 : 0);
-      if (this.playerCar.damage >= 100 && this.wanted > 0) {
-        this.bust(150 * this.wanted);
-        return;
-      }
-      if (this.playerCar.damage >= 100) {
-        this.toast('Your ride is totalled — get out and find another');
-        this.playerCar.damage = 99;
-      }
-      this.sound.engine(true, Math.abs(this.playerCar.speed) / 40);
     } else {
       if (this.input.hit('KeyE')) this.tryEnterCar();
       if (this.input.hit('KeyF')) this.tryPunch();

@@ -72,6 +72,7 @@ export class Crowd {
   }
 
   scare(pos, radius) {
+    if (!pos) return; // on foot the player has no car position
     for (const walker of this.walkers) {
       const d = Math.hypot(walker.mesh.position.x - pos.x, walker.mesh.position.z - pos.z);
       if (d < radius) {
