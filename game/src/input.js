@@ -1,77 +1,85 @@
 // Keyboard and mouse input for Solmar Bay.
-//
-// Keys are tracked by their code (KeyW, Space, KeyE ...), never by the
-// character, so any keyboard layout works. A press is an edge: it is only
-// reported once, on the frame after the key went down. The edges are
-// snapshotted once per frame at the START of the frame loop (beginFrame),
-// so a key pressed during a long, slow software-rendered frame is never
-// swallowed by the renderer clearing it afterwards. Held keys are read
-// directly. Mouse drag orbits the camera.
+// Code-based keys (KeyW, Space, ...) so layouts do not matter. Pressed edges
+// are snapshotted once per frame at the start of the loop (beginFrame), so a
+// slow frame under the software renderer never swallows a key tap.
 export class Input {
   constructor(canvas) {
-    this.held = new Set();
-    this.edge = new Set();
-    this.snapshot = new Set();
-    this.dragX = 0;
-    this.dragY = 0;
+    this.held = Object.create(null);
+    this.pressed = Object.create(null);
+    this.released = Object.create(null);
+    this._queue = [];
+    this.mouseDX = 0;
+    this.mouseDY = 0;
     this.dragging = false;
-    this.lastX = 0;
-    this.lastY = 0;
-    this.anyKey = false;
+    this._lastX = 0;
+    this._lastY = 0;
 
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
       if (e.repeat) return;
-      this.held.add(e.code);
-      this.edge.add(e.code);
-      this.anyKey = true;
+      this._queue.push({ code: e.code, down: true });
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
     });
     window.addEventListener('keyup', (e) => {
-      this.held.delete(e.code);
+      this._queue.push({ code: e.code, down: false });
     });
     window.addEventListener('blur', () => {
-      this.held.clear();
+      this.held = Object.create(null);
+      this._queue.length = 0;
     });
 
     canvas.addEventListener('mousedown', (e) => {
       this.dragging = true;
-      this.lastX = e.clientX;
-      this.lastY = e.clientY;
-      this.edge.add('MouseClick');
-      this.anyKey = true;
+      this._lastX = e.clientX;
+      this._lastY = e.clientY;
+      this._queue.push({ code: 'Mouse0', down: true });
+    });
+    window.addEventListener('mouseup', (e) => {
+      if (this.dragging) this._queue.push({ code: 'Mouse0', down: false });
+      this.dragging = false;
     });
     window.addEventListener('mousemove', (e) => {
       if (!this.dragging) return;
-      this.dragX += e.clientX - this.lastX;
-      this.dragY += e.clientY - this.lastY;
-      this.lastX = e.clientX;
-      this.lastY = e.clientY;
-    });
-    window.addEventListener('mouseup', () => {
-      this.dragging = false;
+      this.mouseDX += e.clientX - this._lastX;
+      this.mouseDY += e.clientY - this._lastY;
+      this._lastX = e.clientX;
+      this._lastY = e.clientY;
     });
   }
 
-  // Call once, at the very start of each frame, before update().
+  // Consume the queued events into held/pressed/released for this frame.
   beginFrame() {
-    this.snapshot = new Set(this.edge);
-    this.edge.clear();
+    this.pressed = Object.create(null);
+    this.released = Object.create(null);
+    for (const ev of this._queue) {
+      if (ev.down) {
+        if (!this.held[ev.code]) this.pressed[ev.code] = true;
+        this.held[ev.code] = true;
+      } else {
+        if (this.held[ev.code]) this.released[ev.code] = true;
+        this.held[ev.code] = false;
+      }
+    }
+    this._queue.length = 0;
   }
 
-  isDown(code) {
-    return this.held.has(code);
+  // Clear the accumulated mouse drag at the end of the frame.
+  endFrame() {
+    this.mouseDX = 0;
+    this.mouseDY = 0;
   }
 
-  // True only on the frame after the key went down.
-  pressed(code) {
-    return this.snapshot.has(code);
-  }
+  isDown(code) { return !!this.held[code]; }
+  wasPressed(code) { return !!this.pressed[code]; }
+  wasReleased(code) { return !!this.released[code]; }
 
-  // Accumulated mouse drag since the last call, in pixels.
-  consumeDrag() {
-    const out = { dx: this.dragX, dy: this.dragY };
-    this.dragX = 0;
-    this.dragY = 0;
-    return out;
+  // Movement keys: WASD or arrows.
+  axis() {
+    let x = 0;
+    let y = 0;
+    if (this.isDown('KeyA') || this.isDown('ArrowLeft')) x -= 1;
+    if (this.isDown('KeyD') || this.isDown('ArrowRight')) x += 1;
+    if (this.isDown('KeyW') || this.isDown('ArrowUp')) y += 1;
+    if (this.isDown('KeyS') || this.isDown('ArrowDown')) y -= 1;
+    return { x, y };
   }
 }
