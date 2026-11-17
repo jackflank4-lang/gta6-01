@@ -51,18 +51,17 @@ export function stageShot(engine, name) {
   }
 
   if (name === 'mission') {
-    // The finale: Lena on foot southeast of the tower, facing Vic Marino
-    // and his crew — the tower stands off to the side, not a black wall
-    // behind them.
-    const tx = city.tower.x;
-    const tz = city.tower.z;
-    engine.hero.x = tx + 26;
-    engine.hero.z = tz + 26;
-    engine.hero.heading = Math.atan2(tx + 10 - engine.hero.x, tz + 10 - engine.hero.z);
+    // The finale: Lena on foot on road x=-44, facing Vic Marino and his
+    // crew twenty metres up the road — the camera stays on the road too,
+    // with the Meridian Tower to the right. (An earlier staging put a
+    // streetlight pole between the camera and the hero.)
+    engine.hero.x = -44;
+    engine.hero.z = 2;
+    engine.hero.heading = Math.PI;
     engine.people.heroMesh.position.set(engine.hero.x, 0, engine.hero.z);
     engine.people.heroMesh.rotation.y = engine.hero.heading;
-    engine.people.spawnBoss(tx + 10, tz + 10);
-    engine.people.spawnThugs(tx + 10, tz + 10, 6);
+    engine.people.spawnBoss(-44, -18);
+    engine.people.spawnThugs(-44, -18, 6);
     engine.camMode = 0;
     return;
   }
