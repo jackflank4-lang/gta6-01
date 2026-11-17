@@ -424,15 +424,18 @@ export class Game {
   }
 
   // ---- the frame loop ----
+  // Edges (key presses) are cleared right after update() consumes them, NOT
+  // after rendering: on a slow renderer a key pressed during a long render
+  // would otherwise be swallowed before the next frame ever saw it.
   loop() {
     const now = performance.now();
     const dt = Math.min(0.05, (now - this.lastTick) / 1000);
     this.lastTick = now;
     if (this.state === 'playing') this.update(dt);
+    this.input.endFrame();
     this.time += dt;
     this.city.update(dt, this.time);
     this.renderer.render(this.scene, this.camera);
-    this.input.endFrame();
     requestAnimationFrame(() => this.loop());
   }
 
