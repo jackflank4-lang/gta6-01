@@ -1,43 +1,21 @@
-// Solmar Bay bootstrap: collect page errors for the test driver, build
-// the game, and apply screenshot staging when asked (?shot=start|drive|
-// chase|mission). The game object is exposed as window.__game with the
-// debug API the driver uses.
-import { Game } from './engine.js';
-import { stageShot } from './shots.js';
+// Bootstrap for Solmar Bay. Collects page errors into window.__errors (the
+// test driver reads it), parses the query string (?shot=, ?fx=low) and
+// starts the engine, exposing it as window.__game for the driver and the
+// debug hooks.
+import { Engine } from './engine.js';
 
 window.__errors = [];
-window.__shotReady = false;
 window.addEventListener('error', (e) => {
-  window.__errors.push(`ERROR: ${e.message} @ ${e.filename}:${e.lineno}`);
+  window.__errors.push(String(e.message || e.error || 'error'));
 });
 window.addEventListener('unhandledrejection', (e) => {
-  window.__errors.push(`REJECTION: ${String(e.reason).slice(0, 200)}`);
+  window.__errors.push('rejection: ' + String((e.reason && e.reason.message) || e.reason || ''));
 });
 
-const params = new URLSearchParams(location.search);
+const params = new URLSearchParams(window.location.search);
 const lowFx = params.get('fx') === 'low';
-const canvas = document.getElementById('game-canvas');
-const game = new Game(canvas, { lowFx });
-window.__game = game;
+const shot = params.get('shot') || null;
 
-const shot = params.get('shot');
-if (shot) {
-  try {
-    stageShot(game, shot);
-  } catch (err) {
-    window.__errors.push(`STAGE-ERROR: ${String(err).slice(0, 200)}`);
-  }
-  // Let a few frames render before the driver captures. At the software
-  // renderer's pace 12 frames is several real seconds but under a second
-  // of game time, so staged scenes stay composed.
-  let frames = 0;
-  const tick = () => {
-    frames += 1;
-    if (frames >= 12) {
-      window.__shotReady = true;
-      return;
-    }
-    requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-}
+const canvas = document.getElementById('game');
+const engine = new Engine(canvas, { lowFx, shot });
+window.__game = engine;

@@ -1,47 +1,65 @@
-// Deterministic staging for the four screenshots. Each shot sets the
-// game up in a fixed, readable scene: the title menu over the dusk city,
-// driving on the boulevard, a wanted chase with cruisers closing in, and
-// the hero facing the boss and his crew at Meridian Tower. The driver
-// waits for window.__shotReady, which main.js sets after staging.
-export function stageShot(game, name) {
-  const city = game.city;
+// Deterministic screenshot staging for Solmar Bay. Each shot sets up one
+// composed scene the engine then renders; the engine raises
+// window.__shotReady after a dozen frames so the capture driver can shoot.
+// All positions are fixed (seed 1), so the four screenshots are stable.
+export function stageShot(engine, name) {
+  const city = engine.city;
   if (name === 'start') {
-    // Menu over the city: leave the game in the menu state and park the
-    // camera low over the boulevard looking at the tower.
-    game.camera.position.set(city.tower.x - 60, 26, city.tower.z + 95);
-    game.camera.lookAt(city.tower.x, 45, city.tower.z);
-    game.menuShot = true;
+    // Title menu over the dusk city; the engine orbits the camera in menu mode.
+    engine.state = 'menu';
+    engine.hud.showMenu(false);
+    engine.hero.x = city.hideout.x;
+    engine.hero.z = city.hideout.z + 12;
+    engine.people.heroMesh.position.set(engine.hero.x, 0, engine.hero.z);
     return;
   }
-  // The other three shots play the game.
-  game.startGame();
-  game.audio.setRadio(false);
+
   if (name === 'drive') {
-    // Drive north up the boulevard toward Meridian Tower.
-    game.giveCar('sports', 0, 60, Math.PI);
-    game.car.speed = 12;
-    game.cruiseSpeed = 12;
-    game.camMode = 0;
-    game.setBeacon(city.garage.x, city.garage.z, 0xffd27a);
-  } else if (name === 'chase') {
-    // On the x=44 road heading south, cruisers pacing ahead in the lane.
-    game.giveCar('sedan', 44, 88, 0);
-    game.car.speed = 20;
-    game.cruiseSpeed = 20;
-    game.setWanted(3);
-    game.camMode = 0;
-    const offsets = [-4, 4, -4, 4];
-    game.police.cruisers.forEach((c, i) => {
-      c.mesh.position.set(44 + offsets[i % offsets.length], 0, 108 + i * 7);
-      c.heading = 0;
-      c.speed = 20;
-    });
-    game.setBeacon(city.plaza.x, city.plaza.z, 0xff5a5a);
-  } else if (name === 'mission') {
-    game.missions.index = 4;
-    game.missions.start();
-    game.teleport(city.tower.x, city.tower.z + 34);
-    game.hero.heading = Math.PI;
-    game.camMode = 0;
+    // Lena driving down the boulevard (road x=44), camera in chase mode.
+    engine.giveCar('sedan', 44, -60, 0);
+    engine.wanted = 0;
+    engine.hud.setStars(0);
+    for (const c of engine.vehicles.cruisers.slice()) engine.vehicles.removeCruiser(c);
+    engine.hero.car.speed = 12;
+    engine.shotCruise = true;
+    engine.camMode = 0;
+    return;
+  }
+
+  if (name === 'chase') {
+    // Wanted 3: Lena speeding down the boulevard with two cruisers pacing
+    // behind her, light bars flashing.
+    engine.giveCar('sedan', 44, -60, 0);
+    engine.addWanted(2); // steal already added 1 -> wanted 3
+    engine.hero.car.speed = 14;
+    engine.shotCruise = true;
+    engine.camMode = 0;
+    const cruisers = engine.vehicles.cruisers;
+    if (cruisers[0]) {
+      cruisers[0].x = 40; cruisers[0].z = -88; cruisers[0].heading = 0; cruisers[0].speed = 13;
+      cruisers[0].sync();
+    }
+    if (cruisers[1]) {
+      cruisers[1].x = 48; cruisers[1].z = -96; cruisers[1].heading = 0; cruisers[1].speed = 13;
+      cruisers[1].sync();
+    }
+    if (cruisers[2]) engine.vehicles.removeCruiser(cruisers[2]);
+    return;
+  }
+
+  if (name === 'mission') {
+    // The finale: Lena on foot in the tower plaza, facing Vic Marino and
+    // his crew under the red beacon.
+    const tx = city.tower.x;
+    const tz = city.tower.z;
+    engine.hero.x = tx + 14;
+    engine.hero.z = tz + 14;
+    engine.hero.heading = Math.atan2(tx - engine.hero.x, tz - engine.hero.z);
+    engine.people.heroMesh.position.set(engine.hero.x, 0, engine.hero.z);
+    engine.people.heroMesh.rotation.y = engine.hero.heading;
+    engine.people.spawnBoss(tx + 4, tz + 4);
+    engine.people.spawnThugs(tx, tz, 6);
+    engine.camMode = 0;
+    return;
   }
 }
