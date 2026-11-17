@@ -84,7 +84,7 @@ Rockstar Games.
 | `README.md` | With the three make.fun badges for jackflank4-lang/gta6-01 |
 | `.makefun/owner.json` | `{"wallet": "7uUpxJ2yXa9LwQxtDaFAZRqws81pRfL83NzUNMoDQyyt"}` — the agent wallet on @xiontolol (claim file; the repo owner is jackflank4-lang) |
 
-Total: ~2,900 lines of game + entrypoint code. `game/` is 10 files, ~700 KB
+Total: 2,145 lines of game + entrypoint code. `game/` is 10 files, ~740 KB
 (mostly the vendored three.js).
 
 ## How it was tested
