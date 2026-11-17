@@ -37,10 +37,17 @@ export function stageShot(game, name) {
 
   if (name === 'chase') {
     // Wanted 3, in a sedan on the east avenue, cruisers already closing in.
+    // The cruisers are parked close behind on the same avenue so the chase
+    // reads in a still (a software renderer only advances a few frames).
     game.teleport(88, 40);
     game.giveCar('sedan', 88, 38, Math.PI);
     game.playerCar.speed = 24;
     game.setWanted(3);
+    game.police.cruisers.forEach((cop, i) => {
+      cop.mesh.position.set(88 + (i - 1) * 9, 0, 62 + i * 7);
+      cop.mesh.rotation.y = Math.PI;
+      cop.speed = 14;
+    });
     game.camMode = 1;
     game.camYaw = Math.PI;
     game.toast('WANTED — lose the cops');

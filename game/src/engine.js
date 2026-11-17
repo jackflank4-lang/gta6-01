@@ -38,11 +38,14 @@ export class Game {
     this.radioOn = false;
     this.muted = false;
     this.errors = [];
+    // ?fx=low trades shadows and antialiasing for speed on weak machines
+    // (and in software renderers). The default keeps the full dusk look.
+    this.lowFx = new URLSearchParams(window.location.search).get('fx') === 'low';
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    this.renderer = new THREE.WebGLRenderer({ antialias: !this.lowFx, preserveDrawingBuffer: true });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.lowFx ? 1 : 1.5));
+    this.renderer.shadowMap.enabled = !this.lowFx;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.getElementById('app').appendChild(this.renderer.domElement);
 
@@ -585,7 +588,10 @@ export class Game {
     const hours = Math.floor(this.clockMin / 60);
     const minutes = Math.floor(this.clockMin % 60);
     this.hud.setClock(hours, minutes);
-    this.hud.drawMinimap(this, this.time);
+    // The minimap repaints a 2048 px ground canvas: throttle it to every
+    // third frame so software renderers keep up.
+    this.frameCount = (this.frameCount || 0) + 1;
+    if (this.frameCount % 3 === 0) this.hud.drawMinimap(this, this.time);
     this.sound.siren(this.wanted > 0);
 
     // Autosave every 30 seconds of play.
