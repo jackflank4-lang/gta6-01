@@ -8,7 +8,7 @@
 // with minimap, start/pause/save, synthesised sound. Screenshots live in screenshots/
 // (the first by name is the cover).
 //
-// Serve it locally with `node serve.ts`, then open http://localhost:8080.
+// Serve it locally with `node serve.ts`, then open the printed local address.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
