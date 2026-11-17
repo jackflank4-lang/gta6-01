@@ -75,6 +75,8 @@
 
   // ---------- toasts ----------
   function toast(text, sub) {
+    // shot scenes stay clean: no centre toast over the frame
+    if (shot && shot !== 'start') return;
     $('toast').textContent = text;
     $('subtoast').textContent = sub || '';
     show($('toast')); show($('subtoast'));
@@ -152,30 +154,38 @@
     }
     setScreen('play');
     hide(menuEl); show(hud);
+    // shot scenes must be clean: no intro toast over the frame
+    world.events = [];
+    toastTimer = 0; hide($('toast')); hide($('subtoast'));
     if (shot === 'drive' || shot === 'chase') {
-      // put Dax in a parked car on a road, engine running
-      const spot = city.parkedSpots[2];
-      const car = world.cars.find((c) => c.driver === 'parked' && Math.abs(c.x - spot.x) < 1 && Math.abs(c.z - spot.z) < 1)
-        || world.cars.find((c) => c.driver === 'parked');
+      // Dax in a car on the central north-south road (x=0), driving south
+      // through the city so buildings, traffic and the road read in frame.
+      const car = world.cars.find((c) => c.driver === 'parked');
+      car.x = 0; car.z = 80; car.angle = 0;
       world.player.x = car.x; world.player.z = car.z;
       world.enterCar(car);
-      world.camYaw = car.angle;
-      SB.Render.camYaw = car.angle;
+      world.camYaw = 0;
+      SB.Render.camYaw = 0;
       if (shot === 'chase') {
         world.addWanted(3, true);
         world.events = [];
       }
     } else if (shot === 'mission') {
-      // mission 2 in progress at the docks: thugs closing in
+      // mission 2 in progress at the docks: Dax on the road south of the
+      // Docks building, thugs in front of him, beacon behind them.
       world.mission = null;
       world.startMission(1);
       world.events = [];
       const d = city.places.docks;
-      world.player.x = d.x - 14; world.player.z = d.z + 10;
-      world.player.angle = Math.atan2(d.x - world.player.x, d.z - world.player.z);
-      world.camYaw = world.player.angle;
-      SB.Render.camYaw = world.player.angle;
-      for (const t of world.thugs) { t.x = d.x + (Math.random() * 8 - 4); t.z = d.z + (Math.random() * 8 - 4); }
+      world.player.x = d.x; world.player.z = d.z + 30;
+      world.player.angle = Math.PI;
+      world.camYaw = Math.PI;
+      SB.Render.camYaw = Math.PI;
+      const spots = [[-6, 14], [0, 12], [6, 15]];
+      world.thugs.forEach((t, i) => {
+        t.x = d.x + spots[i][0]; t.z = d.z + spots[i][1];
+        t.angle = Math.PI; // facing the player (south)
+      });
     }
     window.__shotReady = true;
   }

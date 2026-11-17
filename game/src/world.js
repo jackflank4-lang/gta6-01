@@ -70,6 +70,7 @@
       this.missionIndex = 0; this.mission = null; this.missionTarget = null;
       this.camYaw = Math.PI;
       this.time = 0; this.won = false; this.freeRoam = false;
+      this.saveTimer = 20; // first auto-save after 20s of play, not on frame 1
       this.events = [];
       this.spawnTraffic();
       this.spawnPeds();
@@ -160,6 +161,9 @@
     },
     // ---------- missions ----------
     startMission: function (i) {
+      // clear any leftover mission enemies before staging the new mission
+      this.thugs.forEach((t) => SB.Render.removeMesh(t.mesh));
+      this.thugs = [];
       this.missionIndex = i;
       if (i >= MISSIONS.length) {
         this.freeRoam = true;
@@ -466,6 +470,7 @@
       const speed = input.down('ShiftLeft') || input.down('ShiftRight') ? CFG.runSpeed : CFG.walkSpeed;
       const moving = axis.x !== 0 || axis.y !== 0;
       p.moving = moving;
+      p.speed = moving ? speed : 0;
       if (moving) {
         // camera-relative movement
         const fx = Math.sin(this.camYaw), fz = Math.cos(this.camYaw);

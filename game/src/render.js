@@ -10,7 +10,7 @@
     city: null, facadeCache: {},
     playerMesh: null, carMeshes: new Map(), pedMeshes: new Map(),
     markerMesh: null, markerRing: null, beaconLight: null,
-    camYaw: 0, camPitch: 0.42, camDist: 26,
+    camYaw: 0, camPitch: 0.30, camDist: 22,
     tracer: null, muzzle: null,
 
     init: function (canvas, city) {
@@ -306,7 +306,7 @@
       const targetYaw = yaw + this.camOrbit;
       this.camYaw += (targetYaw - this.camYaw) * Math.min(1, dt * 6);
       this.camPitch = Math.max(0.18, Math.min(0.9, this.camPitch - SB.Input.dragDY * 0.002));
-      const dist = focus.inCar ? 30 : 24;
+      const dist = focus.inCar ? 22 : 18;
       const cx = focus.x - Math.sin(this.camYaw) * Math.cos(this.camPitch) * dist;
       const cz = focus.z - Math.cos(this.camYaw) * Math.cos(this.camPitch) * dist;
       const cy = 4 + Math.sin(this.camPitch) * dist;
