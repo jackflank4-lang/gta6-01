@@ -128,7 +128,10 @@ by pushing this commit and submitting it.
 
 - `f329b8c` rebuild from scratch — city, vehicles, people, missions, hud, engine
 - `f475647` fix cruiser ram spam, steal keeps parked heading, mission save order
-- (next) balance thug fight, cruise speed for staged shots, screenshots + this report
+- `62be89e` balance thug fight (6 dmg, 1.15 s cooldown, punch 34)
+- `d3de9f4` cruise speed for staged shots, chase on the x=44 road, faster shot-ready
+- `14eacc1` screenshots (4 real captures, viewed) + combat probe driver
+- (final) this report
 
 Not submitted or pushed by this builder (no credentials in session) — the
 parent agent handles seal, push, and submit.
