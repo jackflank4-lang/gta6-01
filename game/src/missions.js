@@ -161,11 +161,12 @@ export function createMissions(city) {
       if (!bossSpawned) {
         bossSpawned = true;
         const t = city.tower;
-        W.people.spawnThug(t.x + 6, t.z + 6, { hp: 300, dmg: 10, scale: 1.35, shirt: 0x111111, isBoss: true, name: 'Vic Marino', reward: 500 });
-        for (let i = 0; i < 3; i += 1) {
-          const a = (i / 3) * Math.PI * 2;
-          W.people.spawnThug(t.x + Math.sin(a) * 10, t.z + Math.cos(a) * 10, { hp: 120, dmg: 8 });
-        }
+        // Boss and crew stage on the road south of the tower (clear of the
+        // tower itself — spawning inside it would trap them in the walls).
+        W.people.spawnThug(t.x, t.z + 14, { hp: 300, dmg: 10, scale: 1.35, shirt: 0x111111, isBoss: true, name: 'Vic Marino', reward: 500 });
+        W.people.spawnThug(t.x - 7, t.z + 16, { hp: 120, dmg: 8 });
+        W.people.spawnThug(t.x + 7, t.z + 16, { hp: 120, dmg: 8 });
+        W.people.spawnThug(t.x, t.z + 20, { hp: 120, dmg: 8 });
         W.toast('Vic Marino is at the tower. Take him down.');
       }
       if (bossSpawned && !W.people.boss) {

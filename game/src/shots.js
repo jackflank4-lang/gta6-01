@@ -57,25 +57,27 @@ export async function stageShot(game, name, seed) {
     game.setWanted(2);
     game.setCameraMode(0);
     game.snapCamera();
-    // Wait for the cruisers to close in (max 8 s).
+    // Wait for the cruisers to close in (max 8 s), then pull the camera
+    // back to the far view so the cruisers behind the car enter the frame.
     for (let i = 0; i < 40; i += 1) {
       await sleep(200);
       const s = game.debugState();
       if (s.police >= 1) break;
     }
     await sleep(1200);
+    game.setCameraMode(1);
     game.snapCamera();
     window.__shotReady = true;
     return;
   }
 
   if (name === 'mission') {
-    // The boss fight: Lena on foot just south of Meridian Tower, facing
-    // it — the chase camera behind her lands on the road (clear of
+    // The boss fight: Lena on foot on the road south of Meridian Tower,
+    // facing it — the chase camera behind her lands on the road (clear of
     // buildings) and the tower, Vic Marino and his crew are all in frame.
     game.setMission(4);
     const t = city.tower;
-    game.teleport(t.x, t.z + 8);
+    game.teleport(t.x, t.z + 22);
     game.hero.heading = Math.PI;
     game.setCameraMode(0);
     game.snapCamera();
