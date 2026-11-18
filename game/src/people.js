@@ -1,300 +1,368 @@
-// People for Solmar Bay: the hero Lena Cruz, 22 wandering pedestrians,
-// thugs (missions 3 and 5), the boss Vic Marino, and foot cops who chase
-// the hero when she is wanted and on foot.
-// Movement is deliberately simple and robust: no pathfinding, just steering
-// toward a target point with building collision handled by city.blocked.
+// People for Solmar Bay — Neon Heat.
+// Lena (the hero), wandering pedestrians, mission thugs, the boss Vic
+// Marino, and foot cops who bust the player when the heat is on.
 const THREE = window.THREE;
 
-const PED_COLORS = [0xe74c3c, 0x3498db, 0x2ecc71, 0xf39c12, 0x9b59b6, 0x1abc9c, 0xd35400, 0x7f8c8d];
-
-function makePersonMesh(shirt, pants, scale = 1) {
+function makePersonMesh(shirt, pants, scale, skin) {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(0.55, 0.8, 0.32),
-    new THREE.MeshLambertMaterial({ color: shirt }),
-  );
-  body.position.y = 1.05;
-  body.castShadow = true;
-  g.add(body);
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.24, 10, 8),
-    new THREE.MeshLambertMaterial({ color: 0xe8b88a }),
-  );
-  head.position.y = 1.65;
+  const shirtMat = new THREE.MeshStandardMaterial({ color: shirt, roughness: 0.8 });
+  const pantsMat = new THREE.MeshStandardMaterial({ color: pants, roughness: 0.85 });
+  const skinMat = new THREE.MeshStandardMaterial({ color: skin || 0xd9a066, roughness: 0.7 });
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.38, 0.85, 8), shirtMat);
+  torso.position.y = 1.05;
+  torso.castShadow = true;
+  g.add(torso);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 10, 8), skinMat);
+  head.position.y = 1.72;
   head.castShadow = true;
   g.add(head);
-  const legMat = new THREE.MeshLambertMaterial({ color: pants });
-  for (const lx of [-0.14, 0.14]) {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, 0.22), legMat);
-    leg.position.set(lx, 0.35, 0);
+  for (const x of [-0.2, 0.2]) {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.62, 6), pantsMat);
+    leg.position.set(x, 0.31, 0);
     g.add(leg);
   }
-  g.scale.setScalar(scale);
+  for (const x of [-0.42, 0.42]) {
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.7, 6), shirtMat);
+    arm.position.set(x, 1.1, 0);
+    g.add(arm);
+  }
+  g.scale.setScalar(scale || 1);
   return g;
 }
 
-export function createPeople(scene, city, rng) {
-  const hero = {
-    x: 0, y: 0, z: 0, heading: 0, vy: 0, hp: 100,
-    onGround: true, mesh: null, punchCooldown: 0, walkPhase: 0,
-  };
-  hero.mesh = makePersonMesh(0x00c8a0, 0x1c2733);
-  // Lena's teal jacket and dark hair set her apart from the crowd.
-  const hair = new THREE.Mesh(
-    new THREE.SphereGeometry(0.25, 10, 8),
-    new THREE.MeshLambertMaterial({ color: 0x14100c }),
-  );
-  hair.position.y = 1.72;
-  hair.scale.set(1, 0.7, 1);
-  hero.mesh.add(hair);
-  scene.add(hero.mesh);
+const PED_SHIRTS = [0x3a7bd8, 0xd83a3a, 0x3ad8a0, 0xe8d83a, 0x8a3ad8, 0xd8d8e0, 0x5ad8e0, 0xd88a3a];
+const PED_PANTS = [0x2a2a30, 0x3a4a6a, 0x5a3a2a, 0x2a3a2a];
 
-  const peds = [];
-  for (let i = 0; i < 22; i += 1) {
-    const p = city.roadPoint();
-    const mesh = makePersonMesh(rng.pick(PED_COLORS), rng.pick([0x2c3e50, 0x5d4037, 0x37474f]));
-    mesh.position.set(p.x, 0, p.z);
-    scene.add(mesh);
-    peds.push({
-      mesh, x: p.x, z: p.z, heading: rng.range(0, Math.PI * 2),
-      speed: rng.range(1.2, 2.0), tx: p.x, tz: p.z,
-      flee: 0, wait: rng.range(0, 3),
-    });
-  }
-
-  const thugs = [];
-  let boss = null;
-  const cops = [];
-
-  function spawnThug(x, z, opts = {}) {
-    const mesh = makePersonMesh(opts.shirt || 0x8b1a1a, 0x222222, opts.scale || 1.15);
-    mesh.position.set(x, 0, z);
-    scene.add(mesh);
-    const t = {
-      mesh, x, z, heading: rng.range(0, Math.PI * 2),
-      hp: opts.hp || 100, dmg: opts.dmg || 6, speed: opts.speed || 3.2,
-      attackCooldown: 0, dead: false, isBoss: !!opts.isBoss, name: opts.name || 'Thug',
-      reward: opts.reward || 50,
+export class PeopleSystem {
+  constructor(scene, city, rng, callbacks) {
+    this.scene = scene;
+    this.city = city;
+    this.rng = rng;
+    this.cb = callbacks || {};
+    this.hero = {
+      pos: new THREE.Vector3(-110, 0, 96),
+      heading: Math.PI,
+      vy: 0,
+      grounded: true,
+      hp: 100,
+      punchCd: 0,
+      speed: 0,
+      onFoot: true,
+      mesh: null,
     };
-    thugs.push(t);
-    if (opts.isBoss) boss = t;
-    return t;
+    this.pedestrians = [];
+    this.thugs = [];
+    this.boss = null;
+    this.cops = [];
+    this.spawnPedestrians();
   }
 
-  function spawnFootCop(x, z) {
-    const mesh = makePersonMesh(0x1a3a6b, 0x111111, 1.1);
-    mesh.position.set(x, 0, z);
-    scene.add(mesh);
-    const c = { mesh, x, z, heading: 0, attackCooldown: 0, bustTimer: 0 };
-    cops.push(c);
-    return c;
+  spawnPedestrians() {
+    for (let i = 0; i < 22; i++) {
+      const mesh = makePersonMesh(
+        this.rng.pick(PED_SHIRTS),
+        this.rng.pick(PED_PANTS),
+        this.rng.range(0.92, 1.08)
+      );
+      const x = this.rng.range(-160, 160);
+      const z = this.rng.range(-160, 160);
+      mesh.position.set(x, 0, z);
+      this.scene.add(mesh);
+      this.pedestrians.push({
+        mesh,
+        pos: mesh.position,
+        heading: this.rng.range(0, Math.PI * 2),
+        speed: this.rng.range(1.1, 1.8),
+        target: { x: this.rng.range(-160, 160), z: this.rng.range(-160, 160) },
+        flee: 0,
+      });
+    }
   }
 
-  function removePerson(p, list) {
-    scene.remove(p.mesh);
-    const i = list.indexOf(p);
-    if (i >= 0) list.splice(i, 1);
+  heroMesh() {
+    if (!this.hero.mesh) {
+      // Lena: teal jacket, dark jeans, pink bandana cap.
+      const m = makePersonMesh(0x0e8a8a, 0x1a1a2e, 1.0, 0xe8b088);
+      const cap = new THREE.Mesh(
+        new THREE.SphereGeometry(0.27, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+        new THREE.MeshStandardMaterial({ color: 0xff5ce1, roughness: 0.6 })
+      );
+      cap.position.y = 1.78;
+      m.add(cap);
+      this.hero.mesh = m;
+      this.scene.add(m);
+    }
+    return this.hero.mesh;
   }
 
-  // Make every pedestrian within radius run away from (x, z).
-  function scare(x, z, radius) {
-    for (const p of peds) {
-      const d = Math.hypot(p.x - x, p.z - z);
-      if (d < radius) {
-        p.flee = 3;
-        const a = Math.atan2(p.x - x, p.z - z);
-        p.tx = p.x + Math.sin(a) * 20;
-        p.tz = p.z + Math.cos(a) * 20;
+  spawnThugs(n, center, spread) {
+    for (let i = 0; i < n; i++) {
+      const mesh = makePersonMesh(0x8a1a1a, 0x1a1a1a, 1.08, 0xc98a5a);
+      const x = center.x + this.rng.range(-spread, spread);
+      const z = center.z + this.rng.range(-spread, spread);
+      mesh.position.set(x, 0, z);
+      this.scene.add(mesh);
+      this.thugs.push({ mesh, pos: mesh.position, hp: 50, attackCd: 0, alive: true, heading: 0 });
+    }
+    return this.thugs;
+  }
+
+  spawnBoss(pos) {
+    const mesh = makePersonMesh(0x1a1a1a, 0x3a2a1a, 1.3, 0xd9a066);
+    // Gold chain.
+    const chain = new THREE.Mesh(
+      new THREE.TorusGeometry(0.3, 0.05, 6, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffd23a, metalness: 0.9, roughness: 0.3 })
+    );
+    chain.position.y = 1.35;
+    chain.rotation.x = Math.PI / 2.4;
+    mesh.add(chain);
+    mesh.position.set(pos.x, 0, pos.z);
+    this.scene.add(mesh);
+    this.boss = { mesh, pos: mesh.position, hp: 300, attackCd: 0, alive: true, heading: 0 };
+    return this.boss;
+  }
+
+  spawnFootCop(pos) {
+    const mesh = makePersonMesh(0x1a2a5a, 0x1a1a2e, 1.02, 0xc98a5a);
+    const cap = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.28, 0.28, 0.1, 10),
+      new THREE.MeshStandardMaterial({ color: 0x0a1a3a, roughness: 0.5 })
+    );
+    cap.position.y = 1.92;
+    mesh.add(cap);
+    mesh.position.set(pos.x, 0, pos.z);
+    this.scene.add(mesh);
+    const cop = { mesh, pos: mesh.position, touchTimer: 0, giveUp: 0 };
+    this.cops.push(cop);
+    return cop;
+  }
+
+  clearEnemies() {
+    for (const t of this.thugs) this.scene.remove(t.mesh);
+    this.thugs = [];
+    if (this.boss) {
+      this.scene.remove(this.boss.mesh);
+      this.boss = null;
+    }
+    for (const c of this.cops) this.scene.remove(c.mesh);
+    this.cops = [];
+  }
+
+  // Hero punch: 25 damage to the nearest enemy in front within 2.4 m.
+  heroPunch() {
+    const h = this.hero;
+    if (h.punchCd > 0 || !h.onFoot) return null;
+    h.punchCd = 0.35;
+    const fx = Math.sin(h.heading);
+    const fz = Math.cos(h.heading);
+    let best = null;
+    let bestD = 2.4;
+    const consider = (target, kind) => {
+      const dx = target.pos.x - h.pos.x;
+      const dz = target.pos.z - h.pos.z;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      if (d > bestD) return;
+      const dot = d > 0.01 ? (dx * fx + dz * fz) / d : 1;
+      if (dot < 0.35) return;
+      bestD = d;
+      best = { target, kind };
+    };
+    for (const t of this.thugs) if (t.alive) consider(t, 'thug');
+    if (this.boss && this.boss.alive) consider(this.boss, 'boss');
+    for (const c of this.cops) consider(c, 'cop');
+    for (const p of this.pedestrians) consider(p, 'ped');
+    if (!best) return { hit: false };
+    if (best.kind === 'ped') {
+      best.target.flee = 3;
+      return { hit: true, kind: 'ped' };
+    }
+    if (best.kind === 'cop') {
+      this.scene.remove(best.target.mesh);
+      this.cops.splice(this.cops.indexOf(best.target), 1);
+      if (this.cb.onCopDown) this.cb.onCopDown();
+      return { hit: true, kind: 'cop' };
+    }
+    best.target.hp -= 25;
+    if (best.target.hp <= 0) {
+      best.target.alive = false;
+      this.scene.remove(best.target.mesh);
+      if (best.kind === 'thug') {
+        this.thugs.splice(this.thugs.indexOf(best.target), 1);
+        if (this.cb.onThugKilled) this.cb.onThugKilled(best.target);
+      } else if (best.kind === 'boss') {
+        if (this.cb.onBossKilled) this.cb.onBossKilled(best.target);
       }
+      return { hit: true, kind: best.kind, killed: true };
     }
+    return { hit: true, kind: best.kind, hpLeft: best.target.hp };
   }
 
-  function updateHero(dt, G) {
-    const input = G.input;
-    hero.punchCooldown = Math.max(0, hero.punchCooldown - dt);
-    if (G.driving) {
-      // The hero rides inside the car: mesh hidden, position follows it.
-      hero.mesh.visible = false;
-      if (G.car) {
-        hero.x = G.car.x;
-        hero.z = G.car.z;
-        hero.heading = G.car.heading;
-      }
-      return;
-    }
-    hero.mesh.visible = true;
-    const mx = input ? input.moveX() : 0;
-    const my = input ? input.moveY() : 0;
-    const sprint = input ? input.sprint() : false;
-    const speed = sprint ? 8 : 5;
-    let dx = 0;
-    let dz = 0;
-    if (mx !== 0 || my !== 0) {
-      // Camera-relative movement: forward is away from the camera.
-      const camA = G.cameraAngle || 0;
-      const fx = Math.sin(camA);
-      const fz = Math.cos(camA);
-      const rx = Math.cos(camA);
-      const rz = -Math.sin(camA);
-      dx = fx * my + rx * mx;
-      dz = fz * my + rz * mx;
-      const len = Math.hypot(dx, dz) || 1;
-      dx /= len;
-      dz /= len;
-      hero.heading = Math.atan2(dx, dz);
-    }
-    const nx = hero.x + dx * speed * dt;
-    const nz = hero.z + dz * speed * dt;
-    if (!city.blocked(nx, hero.z, 0.6)) hero.x = nx;
-    if (!city.blocked(hero.x, nz, 0.6)) hero.z = nz;
-    hero.walkPhase += dt * (mx !== 0 || my !== 0 ? speed * 1.6 : 0);
+  hurtHero(amount) {
+    const h = this.hero;
+    h.hp = Math.max(0, h.hp - amount);
+    if (this.cb.onHeroHurt) this.cb.onHeroHurt(h.hp);
+    return h.hp;
+  }
 
-    // Jump: exact kinematic update, peak ~1.00 m (vy 6, g 16).
-    if (input && input.hit('Space') && hero.onGround) {
-      hero.vy = 6;
-      hero.onGround = false;
-    }
-    if (!hero.onGround) {
-      hero.y += hero.vy * dt - 0.5 * 16 * dt * dt;
-      hero.vy -= 16 * dt;
-      if (hero.y <= 0) {
-        hero.y = 0;
-        hero.vy = 0;
-        hero.onGround = true;
+  update(dt, input, driving, camYaw) {
+    const h = this.hero;
+    h.punchCd = Math.max(0, h.punchCd - dt);
+    if (h.onFoot && !driving) {
+      const axes = input.axes();
+      const sprint = input.isDown('ShiftLeft') || input.isDown('ShiftRight');
+      const speed = sprint ? 9 : 6;
+      // Camera-relative movement.
+      const fwdX = Math.sin(camYaw);
+      const fwdZ = Math.cos(camYaw);
+      const rightX = Math.cos(camYaw);
+      const rightZ = -Math.sin(camYaw);
+      let mx = fwdX * axes.y + rightX * axes.x;
+      let mz = fwdZ * axes.y + rightZ * axes.x;
+      const len = Math.sqrt(mx * mx + mz * mz);
+      if (len > 0.01) {
+        mx /= len;
+        mz /= len;
+        h.speed = speed;
+        const wantHeading = Math.atan2(mx, mz);
+        let dh = wantHeading - h.heading;
+        while (dh > Math.PI) dh -= Math.PI * 2;
+        while (dh < -Math.PI) dh += Math.PI * 2;
+        h.heading += Math.max(-10 * dt, Math.min(10 * dt, dh));
+        const nx = h.pos.x + mx * speed * dt;
+        const nz = h.pos.z + mz * speed * dt;
+        const fixed = this.city.collideCircle(nx, nz, 0.5);
+        h.pos.x = fixed.x;
+        h.pos.z = fixed.z;
+      } else {
+        h.speed = 0;
       }
-    }
-    // Punch: F key or mouse click, 2.2 m arc in front.
-    const punched = (input && (input.hit('KeyF') || input.mousePressed)) && hero.punchCooldown <= 0;
-    if (punched) {
-      hero.punchCooldown = 0.45;
-      if (G.audio) G.audio.punch();
-      const fx = Math.sin(hero.heading);
-      const fz = Math.cos(hero.heading);
-      for (const t of [...thugs]) {
-        if (t.dead) continue;
-        const dx2 = t.x - hero.x;
-        const dz2 = t.z - hero.z;
-        const d = Math.hypot(dx2, dz2);
-        if (d < 2.4 && (dx2 * fx + dz2 * fz) / (d || 1) > 0.2) {
-          t.hp -= 34;
-          if (G.audio) G.audio.punch();
-          if (t.hp <= 0) {
-            t.dead = true;
-            removePerson(t, thugs);
-            if (t.isBoss) boss = null;
-            if (G.onThugKilled) G.onThugKilled(t);
-          }
+      // Jump.
+      if ((input.wasPressed('Space') || input.wasPressed('KeyJ')) && h.grounded) {
+        h.vy = 6.5;
+        h.grounded = false;
+      }
+      if (!h.grounded) {
+        h.vy -= 22 * dt;
+        h.pos.y += h.vy * dt;
+        if (h.pos.y <= 0) {
+          h.pos.y = 0;
+          h.vy = 0;
+          h.grounded = true;
         }
       }
-      for (const c of [...cops]) {
-        const d = Math.hypot(c.x - hero.x, c.z - hero.z);
-        if (d < 2.4) {
-          removePerson(c, cops);
-          if (G.onCopDown) G.onCopDown(c);
-        }
-      }
+      const mesh = this.heroMesh();
+      mesh.position.copy(h.pos);
+      mesh.rotation.y = h.heading;
+      // Walk bob.
+      mesh.position.y = h.pos.y + (h.speed > 0 ? Math.abs(Math.sin(performance.now() / 140)) * 0.06 : 0);
     }
-    hero.mesh.position.set(hero.x, hero.y, hero.z);
-    hero.mesh.rotation.y = hero.heading;
-    // Little walk bob.
-    hero.mesh.position.y = hero.y + Math.abs(Math.sin(hero.walkPhase)) * 0.06;
-  }
 
-  function updatePeds(dt, G) {
-    for (const p of peds) {
-      if (p.flee > 0) p.flee -= dt;
-      const dx = p.tx - p.x;
-      const dz = p.tz - p.z;
-      const d = Math.hypot(dx, dz);
+    // Pedestrians wander; flee when punched.
+    for (const p of this.pedestrians) {
+      let tx = p.target.x;
+      let tz = p.target.z;
+      let sp = p.speed;
+      if (p.flee > 0) {
+        p.flee -= dt;
+        const dx = p.pos.x - h.pos.x;
+        const dz = p.pos.z - h.pos.z;
+        const d = Math.max(0.1, Math.sqrt(dx * dx + dz * dz));
+        tx = p.pos.x + (dx / d) * 20;
+        tz = p.pos.z + (dz / d) * 20;
+        sp = 5;
+      }
+      const dx = tx - p.pos.x;
+      const dz = tz - p.pos.z;
+      const d = Math.sqrt(dx * dx + dz * dz);
       if (d < 1.5) {
-        if (p.wait > 0) {
-          p.wait -= dt;
-        } else {
-          const t = city.roadPoint();
-          p.tx = t.x;
-          p.tz = t.z;
-          p.wait = rng.range(1, 4);
+        p.target = { x: this.rng.range(-160, 160), z: this.rng.range(-160, 160) };
+      } else {
+        p.heading = Math.atan2(dx, dz);
+        const nx = p.pos.x + (dx / d) * sp * dt;
+        const nz = p.pos.z + (dz / d) * sp * dt;
+        const fixed = this.city.collideCircle(nx, nz, 0.5);
+        p.pos.x = fixed.x;
+        p.pos.z = fixed.z;
+        p.mesh.rotation.y = p.heading;
+      }
+    }
+
+    // Thugs chase and punch.
+    for (const t of this.thugs) {
+      if (!t.alive) continue;
+      t.attackCd = Math.max(0, t.attackCd - dt);
+      const dx = h.pos.x - t.pos.x;
+      const dz = h.pos.z - t.pos.z;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      if (d < 26 && h.onFoot) {
+        if (d > 1.9) {
+          t.pos.x += (dx / d) * 3.6 * dt;
+          t.pos.z += (dz / d) * 3.6 * dt;
+          const fixed = this.city.collideCircle(t.pos.x, t.pos.z, 0.5);
+          t.pos.x = fixed.x;
+          t.pos.z = fixed.z;
+        } else if (t.attackCd <= 0) {
+          t.attackCd = 1.1;
+          this.hurtHero(6);
+        }
+        t.heading = Math.atan2(dx, dz);
+        t.mesh.rotation.y = t.heading;
+      }
+    }
+
+    // Boss Vic Marino: faster, hits harder.
+    if (this.boss && this.boss.alive) {
+      const b = this.boss;
+      b.attackCd = Math.max(0, b.attackCd - dt);
+      const dx = h.pos.x - b.pos.x;
+      const dz = h.pos.z - b.pos.z;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      if (d < 30 && h.onFoot) {
+        if (d > 2.1) {
+          b.pos.x += (dx / d) * 4.4 * dt;
+          b.pos.z += (dz / d) * 4.4 * dt;
+          const fixed = this.city.collideCircle(b.pos.x, b.pos.z, 0.7);
+          b.pos.x = fixed.x;
+          b.pos.z = fixed.z;
+        } else if (b.attackCd <= 0) {
+          b.attackCd = 1.0;
+          this.hurtHero(14);
+        }
+        b.heading = Math.atan2(dx, dz);
+        b.mesh.rotation.y = b.heading;
+      }
+    }
+
+    // Foot cops chase on foot; a sustained touch busts the player.
+    for (const c of [...this.cops]) {
+      const dx = h.pos.x - c.pos.x;
+      const dz = h.pos.z - c.pos.z;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      if (!h.onFoot || d > 60) {
+        c.giveUp += dt;
+        if (c.giveUp > 8) {
+          this.scene.remove(c.mesh);
+          this.cops.splice(this.cops.indexOf(c), 1);
         }
         continue;
       }
-      const sp = p.flee > 0 ? 4.2 : p.speed;
-      const nx = p.x + (dx / d) * sp * dt;
-      const nz = p.z + (dz / d) * sp * dt;
-      if (!city.blocked(nx, p.z, 0.5)) p.x = nx;
-      if (!city.blocked(p.x, nz, 0.5)) p.z = nz;
-      p.heading = Math.atan2(dx, dz);
-      p.mesh.position.set(p.x, 0, p.z);
-      p.mesh.rotation.y = p.heading;
-    }
-  }
-
-  function updateThugs(dt, G) {
-    for (const t of [...thugs]) {
-      if (t.dead) continue;
-      t.attackCooldown = Math.max(0, t.attackCooldown - dt);
-      const dx = hero.x - t.x;
-      const dz = hero.z - t.z;
-      const d = Math.hypot(dx, dz) || 1;
-      if (d < 26 && !G.driving) {
-        const nx = t.x + (dx / d) * t.speed * dt;
-        const nz = t.z + (dz / d) * t.speed * dt;
-        if (!city.blocked(nx, t.z, 0.6)) t.x = nx;
-        if (!city.blocked(t.x, nz, 0.6)) t.z = nz;
-        t.heading = Math.atan2(dx, dz);
-        if (d < 1.9 && t.attackCooldown <= 0) {
-          t.attackCooldown = 1.15;
-          if (G.onHeroDamaged) G.onHeroDamaged(t.dmg, t.isBoss ? 'boss' : 'thug');
+      c.giveUp = 0;
+      if (d > 1.3) {
+        c.touchTimer = 0;
+        c.pos.x += (dx / d) * 5.2 * dt;
+        c.pos.z += (dz / d) * 5.2 * dt;
+        const fixed = this.city.collideCircle(c.pos.x, c.pos.z, 0.5);
+        c.pos.x = fixed.x;
+        c.pos.z = fixed.z;
+      } else {
+        c.touchTimer += dt;
+        if (c.touchTimer > 0.6 && this.cb.onBusted) {
+          this.cb.onBusted();
+          c.touchTimer = 0;
         }
       }
-      t.mesh.position.set(t.x, 0, t.z);
-      t.mesh.rotation.y = t.heading;
+      c.mesh.rotation.y = Math.atan2(dx, dz);
     }
   }
-
-  function updateCops(dt, G) {
-    for (const c of [...cops]) {
-      c.attackCooldown = Math.max(0, c.attackCooldown - dt);
-      const dx = hero.x - c.x;
-      const dz = hero.z - c.z;
-      const d = Math.hypot(dx, dz) || 1;
-      if (d < 1.6) {
-        c.bustTimer += dt;
-        if (c.bustTimer > 1.5 && G.onBusted) G.onBusted();
-      } else {
-        c.bustTimer = 0;
-      }
-      if (!G.driving && d > 1.4) {
-        const nx = c.x + (dx / d) * 5.2 * dt;
-        const nz = c.z + (dz / d) * 5.2 * dt;
-        if (!city.blocked(nx, c.z, 0.6)) c.x = nx;
-        if (!city.blocked(c.x, nz, 0.6)) c.z = nz;
-        c.heading = Math.atan2(dx, dz);
-      }
-      c.mesh.position.set(c.x, 0, c.z);
-      c.mesh.rotation.y = c.heading;
-    }
-  }
-
-  function update(dt, G) {
-    updateHero(dt, G);
-    updatePeds(dt, G);
-    updateThugs(dt, G);
-    updateCops(dt, G);
-  }
-
-  function resetHero(x, z) {
-    hero.x = x;
-    hero.z = z;
-    hero.y = 0;
-    hero.vy = 0;
-    hero.heading = 0;
-    hero.mesh.position.set(x, 0, z);
-    hero.mesh.visible = true;
-  }
-
-  return {
-    update, hero, peds, thugs, cops,
-    get boss() { return boss; },
-    spawnThug, spawnFootCop, scare, resetHero,
-  };
 }
