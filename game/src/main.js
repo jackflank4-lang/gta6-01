@@ -1,40 +1,23 @@
-// Bootstrap for Solmar Bay — Neon Heat.
-// Reads ?shot=, ?seed= and ?fx= from the URL, builds the engine, exposes
-// the debug API, and stages a screenshot scene when requested.
-import { Engine } from './engine.js';
-import { applyShot } from './shots.js';
+// main.js — bootstrap for Solmar Bay.
+// Exposes window.__game (the engine) and window.__errors (every page
+// error, so the test driver can fail loudly on any exception).
+import { Game } from './engine.js';
 
 window.__errors = [];
 window.addEventListener('error', (e) => {
-  window.__errors.push(String((e && e.message) || e));
+  window.__errors.push(String(e.message || e.error || 'unknown error'));
 });
-window.addEventListener('unhandledrejection', (e) => {
-  window.__errors.push(String((e && e.reason) || e));
-});
+const _consoleError = console.error.bind(console);
+console.error = (...args) => {
+  window.__errors.push(args.map((a) => String(a)).join(' '));
+  _consoleError(...args);
+};
 
-const params = new URLSearchParams(location.search);
-const fxLow = params.get('fx') === 'low';
-const worldSeed = parseInt(params.get('seed') || '777', 10);
-const shotSeed = parseInt(params.get('shotseed') || params.get('seed') || '9', 10);
-const shot = params.get('shot');
-
-const container = document.getElementById('game-container');
-const engine = new Engine(container, { fxLow, seed: worldSeed });
-window.__game = engine;
-window.__shotReady = false;
-
-engine.start();
-
-if (shot) {
-  // Let two frames render first, then stage the shot.
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      try {
-        applyShot(engine, shot, shotSeed);
-        window.__shotReady = true;
-      } catch (err) {
-        window.__errors.push('shot: ' + (err && err.message ? err.message : err));
-      }
-    });
-  });
+try {
+  const game = new Game();
+  window.__game = game;
+  window.__shotReady = false;
+} catch (err) {
+  window.__errors.push('boot failed: ' + String(err && err.message ? err.message : err));
+  throw err;
 }

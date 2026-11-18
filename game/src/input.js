@@ -1,64 +1,39 @@
-// Keyboard and mouse input for Solmar Bay — Neon Heat.
-// Held keys are a live set; pressed edges are queued and snapshotted once
-// per frame at the start of the loop, so a short tap is never swallowed by
-// a slow frame (the software renderer runs only a few frames a second).
+// input.js — keyboard state with edge-triggered presses.
+// The engine polls down() for held keys and wasPressed() for one-shot
+// actions (punch, jump, enter car, horn); pressed edges are cleared once
+// per frame by endFrame() so a single tap never fires twice.
 export class Input {
-  constructor(target) {
-    this.held = new Set();
+  constructor() {
+    this.keys = new Set();
     this.pressed = new Set();
-    this.queue = [];
-    this.mouseX = 0;
-    this.mouseY = 0;
-    this.clicked = false;
-    this.clickQueue = false;
-    this.target = target || window;
-    this.target.addEventListener('keydown', (e) => {
-      if (e.repeat) return;
-      this.held.add(e.code);
-      this.queue.push(e.code);
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
-    });
-    this.target.addEventListener('keyup', (e) => {
-      this.held.delete(e.code);
-    });
-    this.target.addEventListener('blur', () => {
-      this.held.clear();
-    });
-    this.target.addEventListener('mousedown', (e) => {
-      this.mouseX = e.clientX;
-      this.mouseY = e.clientY;
-      this.clickQueue = true;
-    });
-    this.target.addEventListener('mousemove', (e) => {
-      this.mouseX = e.clientX;
-      this.mouseY = e.clientY;
-    });
+    this._down = (e) => {
+      if (!e.repeat) this.pressed.add(e.code);
+      this.keys.add(e.code);
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+        e.preventDefault();
+      }
+    };
+    this._up = (e) => { this.keys.delete(e.code); };
+    this._blur = () => { this.keys.clear(); };
+    window.addEventListener('keydown', this._down);
+    window.addEventListener('keyup', this._up);
+    window.addEventListener('blur', this._blur);
   }
-
-  // Call once at the top of every frame: moves queued edges into `pressed`.
-  beginFrame() {
-    this.pressed = new Set(this.queue);
-    this.queue.length = 0;
-    this.clicked = this.clickQueue;
-    this.clickQueue = false;
-  }
-
-  isDown(code) {
-    return this.held.has(code);
-  }
-
-  wasPressed(code) {
-    return this.pressed.has(code);
-  }
-
-  // Movement axes: -1..1, from WASD or the arrow keys.
+  down(code) { return this.keys.has(code); }
+  wasPressed(code) { return this.pressed.has(code); }
+  // WASD / arrows drive vector: x = strafe, y = forward.
   axes() {
-    let x = 0;
-    let y = 0;
-    if (this.isDown('KeyA') || this.isDown('ArrowLeft')) x -= 1;
-    if (this.isDown('KeyD') || this.isDown('ArrowRight')) x += 1;
-    if (this.isDown('KeyW') || this.isDown('ArrowUp')) y += 1;
-    if (this.isDown('KeyS') || this.isDown('ArrowDown')) y -= 1;
+    let x = 0, y = 0;
+    if (this.down('KeyA') || this.down('ArrowLeft')) x -= 1;
+    if (this.down('KeyD') || this.down('ArrowRight')) x += 1;
+    if (this.down('KeyW') || this.down('ArrowUp')) y += 1;
+    if (this.down('KeyS') || this.down('ArrowDown')) y -= 1;
     return { x, y };
+  }
+  endFrame() { this.pressed.clear(); }
+  dispose() {
+    window.removeEventListener('keydown', this._down);
+    window.removeEventListener('keyup', this._up);
+    window.removeEventListener('blur', this._blur);
   }
 }

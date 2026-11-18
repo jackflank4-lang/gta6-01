@@ -5,83 +5,34 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Solmar Bay — Neon Heat</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #12082e; font-family: Arial, Helvetica, sans-serif; color: #fff; }
-  #game-container { position: fixed; inset: 0; }
-  #game-container canvas { display: block; }
-  .hud { position: absolute; pointer-events: none; z-index: 5; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
-  #hud-top-left { top: 14px; left: 16px; font-size: 20px; font-weight: bold; }
-  #hud-cash { color: #4dff88; font-size: 26px; }
-  #hud-stars { color: #4dd8ff; font-size: 22px; letter-spacing: 3px; }
-  #hud-health-wrap { width: 180px; height: 12px; background: rgba(0,0,0,0.55); border: 1px solid #fff; border-radius: 6px; margin-top: 6px; }
-  #hud-health-bar { height: 100%; width: 100%; background: #ff3355; border-radius: 5px; }
-  #hud-health-text { font-size: 14px; }
-  #hud-clock { font-size: 18px; margin-top: 4px; }
-  #hud-top-right { top: 14px; right: 16px; text-align: right; font-size: 20px; font-weight: bold; }
-  #hud-speed { font-size: 26px; }
-  #hud-station { font-size: 14px; color: #ffd23a; }
-  #hud-objective { left: 16px; bottom: 16px; font-size: 17px; background: rgba(0,0,0,0.55); padding: 8px 12px; border-radius: 8px; max-width: 520px; }
-  #hud-toast { left: 50%; top: 84px; transform: translateX(-50%); font-size: 20px; font-weight: bold; color: #ffd23a; opacity: 0; transition: opacity 0.3s; background: rgba(0,0,0,0.5); padding: 8px 16px; border-radius: 8px; white-space: nowrap; }
-  #minimap { position: absolute; right: 16px; bottom: 16px; width: 160px; height: 160px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.6); z-index: 5; background: rgba(0,0,0,0.4); }
-  #hud-help { left: 16px; bottom: 64px; font-size: 12px; color: rgba(255,255,255,0.75); background: rgba(0,0,0,0.4); padding: 6px 10px; border-radius: 6px; }
-  .menu { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; background: rgba(10, 4, 30, 0.55); text-align: center; }
-  .menu h1 { font-size: 64px; letter-spacing: 2px; color: #ff5ce1; text-shadow: 0 0 24px #ff5ce1, 0 4px 0 #7a1a6a; }
-  .menu h2 { font-size: 26px; color: #ffd23a; margin: 8px 0 24px; letter-spacing: 6px; }
-  .menu p { font-size: 17px; max-width: 560px; line-height: 1.5; margin-bottom: 18px; color: #e8e8f0; }
-  .menu button { pointer-events: auto; font-size: 22px; font-weight: bold; padding: 14px 42px; margin: 6px; border: none; border-radius: 10px; background: #ff5ce1; color: #fff; cursor: pointer; box-shadow: 0 4px 0 #7a1a6a; }
-  .menu button:hover { background: #ff7ce8; }
-  .menu button.secondary { background: #2a6a8a; box-shadow: 0 4px 0 #123a4a; }
-  .menu .keys { font-size: 14px; color: #c8c8d8; margin-top: 14px; line-height: 1.7; }
-  #menu-end h1 { color: #ff3355; text-shadow: 0 0 24px #ff3355, 0 4px 0 #5a0a1a; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #14101c; font-family: Arial, Helvetica, sans-serif; }
+  #game-canvas { display: block; width: 100vw; height: 100vh; }
+  .hud { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 5; }
+  .hud-topleft { position: absolute; top: 14px; left: 16px; }
+  .hud-cash { font-size: 30px; font-weight: bold; color: #7dff9a; text-shadow: 2px 2px 0 #000; }
+  .hud-hpwrap { width: 200px; height: 12px; background: #222; border: 1px solid #555; margin-top: 6px; }
+  .hud-hp { height: 100%; width: 100%; background: #35d07a; }
+  .hud-stars { font-size: 22px; letter-spacing: 2px; margin-top: 6px; text-shadow: 1px 1px 0 #000; }
+  .hud-objective { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); max-width: 60vw; text-align: center; font-size: 17px; color: #fff; background: rgba(10, 8, 20, 0.65); padding: 8px 16px; border-radius: 6px; border: 1px solid rgba(255, 210, 74, 0.5); }
+  .hud-speed { position: absolute; bottom: 18px; right: 22px; font-size: 30px; font-weight: bold; color: #fff; text-shadow: 2px 2px 0 #000; }
+  .hud-radio { position: absolute; bottom: 18px; left: 22px; font-size: 15px; color: #ffd24a; text-shadow: 1px 1px 0 #000; }
+  .hud-map { position: absolute; bottom: 54px; right: 18px; width: 180px; height: 180px; border: 2px solid rgba(255, 255, 255, 0.35); border-radius: 50%; background: #12101c; }
+  .hud-toasts { position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); text-align: center; }
+  .hud-toast { background: rgba(10, 8, 20, 0.8); color: #ffd24a; padding: 8px 18px; border-radius: 6px; margin-top: 6px; font-size: 16px; border: 1px solid rgba(255, 210, 74, 0.4); transition: opacity 0.6s; }
+  .hud-toast.fade { opacity: 0; }
+  .menu { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; background: rgba(12, 8, 24, 0.82); color: #fff; z-index: 10; text-align: center; padding: 20px; }
+  .menu-title { font-size: 64px; margin: 0; letter-spacing: 6px; color: #ff4fd8; text-shadow: 0 0 24px #ff4fd8, 3px 3px 0 #000; }
+  .menu-sub { font-size: 22px; letter-spacing: 10px; color: #35e0ff; margin: 6px 0 18px; }
+  .menu-desc { max-width: 560px; font-size: 17px; line-height: 1.5; color: #ddd; }
+  .menu-btn { pointer-events: auto; display: block; margin: 10px auto 0; padding: 12px 42px; font-size: 18px; font-weight: bold; letter-spacing: 2px; color: #111; background: #ffd24a; border: none; border-radius: 6px; cursor: pointer; }
+  .menu-btn:hover { background: #ffe27a; }
+  .menu-howto { max-width: 560px; margin-top: 14px; font-size: 15px; line-height: 1.7; color: #bfefff; background: rgba(255, 255, 255, 0.08); padding: 12px 18px; border-radius: 6px; }
+  .menu-foot { margin-top: 26px; font-size: 13px; color: #888; }
 </style>
-<script src="./vendor/three.min.js"></script>
 </head>
 <body>
-<div id="game-container"></div>
-
-<div id="hud-top-left" class="hud">
-  <div id="hud-cash">$200</div>
-  <div id="hud-stars">☆☆☆☆☆</div>
-  <div id="hud-health-wrap"><div id="hud-health-bar"></div></div>
-  <div>HP <span id="hud-health-text">100</span></div>
-  <div id="hud-clock">18:30</div>
-</div>
-<div id="hud-top-right" class="hud">
-  <div id="hud-speed">0 MPH</div>
-  <div id="hud-station">NEON 88.4</div>
-</div>
-<div id="hud-objective" class="hud">Press Start to begin.</div>
-<div id="hud-toast" class="hud"></div>
-<div id="hud-help" class="hud">WASD drive / walk &middot; E enter-exit car &middot; F punch &middot; Space jump &middot; H horn &middot; L lights &middot; N radio &middot; C camera &middot; P pause</div>
-<canvas id="minimap" width="160" height="160"></canvas>
-
-<div id="menu-start" class="menu">
-  <h1>SOLMAR BAY</h1>
-  <h2>NEON HEAT</h2>
-  <p>Lena Cruz is back in Solmar Bay, and Vic Marino owns the streets.
-  Steal a ride, run the jobs, dodge the heat — and take the tower back,
-  one neon coin at a time.</p>
-  <button id="btn-start">START NEW GAME</button>
-  <button id="btn-continue" class="secondary">CONTINUE</button>
-  <div class="keys">WASD / arrows — drive &amp; walk &nbsp;·&nbsp; E — steal / exit car &nbsp;·&nbsp; F — punch<br>
-  Space — jump &nbsp;·&nbsp; H — horn &nbsp;·&nbsp; L — headlights &nbsp;·&nbsp; N — radio &nbsp;·&nbsp; C — camera &nbsp;·&nbsp; P — pause</div>
-</div>
-
-<div id="menu-pause" class="menu" style="display:none">
-  <h1>PAUSED</h1>
-  <h2>SOLMAR BAY</h2>
-  <p>The bay waits for no one, Lena.</p>
-  <button id="btn-resume">RESUME</button>
-  <button id="btn-restart" class="secondary">RESTART</button>
-</div>
-
-<div id="menu-end" class="menu" style="display:none">
-  <h1 id="end-title">BUSTED</h1>
-  <h2>SOLMAR BAY</h2>
-  <p id="end-text"></p>
-  <button id="btn-retry">BACK ON THE STREET</button>
-</div>
-
+<canvas id="game-canvas"></canvas>
+<script src="./vendor/three.min.js"></script>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>

@@ -1,368 +1,312 @@
-// People for Solmar Bay — Neon Heat.
-// Lena (the hero), wandering pedestrians, mission thugs, the boss Vic
-// Marino, and foot cops who bust the player when the heat is on.
-const THREE = window.THREE;
+// people.js — Lena Cruz, the pedestrians of Solmar Bay, and the
+// Barracuda crew she fights: thugs and boss Vic Marino.
+// Combat is fists only: punch range 2.6 m, 60-degree arc, 25 damage,
+// 0.3 s cooldown. Thugs have 50 HP and pay $50 when they drop; Vic
+// has 300 HP. Pedestrians wander the sidewalks and flee a fight.
+import { makeRng } from './rng.js';
 
-function makePersonMesh(shirt, pants, scale, skin) {
+function buildPersonMesh(opts) {
   const g = new THREE.Group();
-  const shirtMat = new THREE.MeshStandardMaterial({ color: shirt, roughness: 0.8 });
-  const pantsMat = new THREE.MeshStandardMaterial({ color: pants, roughness: 0.85 });
-  const skinMat = new THREE.MeshStandardMaterial({ color: skin || 0xd9a066, roughness: 0.7 });
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.38, 0.85, 8), shirtMat);
-  torso.position.y = 1.05;
-  torso.castShadow = true;
-  g.add(torso);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 10, 8), skinMat);
-  head.position.y = 1.72;
-  head.castShadow = true;
+  const jacket = new THREE.MeshLambertMaterial({ color: opts.jacket });
+  const skin = new THREE.MeshLambertMaterial({ color: 0xd9a066 });
+  const pants = new THREE.MeshLambertMaterial({ color: opts.pants });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.85, 0.36), jacket);
+  body.position.y = 1.15;
+  g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 10), skin);
+  head.position.y = 1.85;
   g.add(head);
-  for (const x of [-0.2, 0.2]) {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.62, 6), pantsMat);
-    leg.position.set(x, 0.31, 0);
-    g.add(leg);
-  }
-  for (const x of [-0.42, 0.42]) {
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.7, 6), shirtMat);
-    arm.position.set(x, 1.1, 0);
-    g.add(arm);
-  }
-  g.scale.setScalar(scale || 1);
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.27, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: opts.hair }));
+  hair.position.y = 1.9;
+  g.add(hair);
+  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.75, 0.24), pants);
+  legL.position.set(-0.17, 0.38, 0);
+  g.add(legL);
+  const legR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.75, 0.24), pants);
+  legR.position.set(0.17, 0.38, 0);
+  g.add(legR);
+  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.7, 0.2), jacket);
+  armL.position.set(-0.42, 1.2, 0);
+  g.add(armL);
+  const armR = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.7, 0.2), jacket);
+  armR.position.set(0.42, 1.2, 0);
+  g.add(armR);
+  g.userData = { legL, legR, armL, armR, body };
+  if (opts.scale) g.scale.setScalar(opts.scale);
   return g;
 }
 
-const PED_SHIRTS = [0x3a7bd8, 0xd83a3a, 0x3ad8a0, 0xe8d83a, 0x8a3ad8, 0xd8d8e0, 0x5ad8e0, 0xd88a3a];
-const PED_PANTS = [0x2a2a30, 0x3a4a6a, 0x5a3a2a, 0x2a3a2a];
-
-export class PeopleSystem {
-  constructor(scene, city, rng, callbacks) {
+export class People {
+  constructor(scene, city, audio) {
     this.scene = scene;
     this.city = city;
-    this.rng = rng;
-    this.cb = callbacks || {};
+    this.audio = audio;
+    this.rng = makeRng(2024);
     this.hero = {
-      pos: new THREE.Vector3(-110, 0, 96),
-      heading: Math.PI,
-      vy: 0,
-      grounded: true,
+      pos: new THREE.Vector3(0, 0, 40),
+      heading: 0,
       hp: 100,
-      punchCd: 0,
-      speed: 0,
       onFoot: true,
-      mesh: null,
+      grounded: true,
+      vy: 0,
+      walkPhase: 0,
+      mesh: buildPersonMesh({ jacket: 0x0e7a6e, pants: 0x1a2a4a, hair: 0x1a1a1a }),
     };
+    this.scene.add(this.hero.mesh);
     this.pedestrians = [];
     this.thugs = [];
     this.boss = null;
-    this.cops = [];
-    this.spawnPedestrians();
+    this.punchCooldown = 0;
+    this.punchTimer = 0;
+    this.onKill = null; // (kind) => void — engine wires the $50 payout
+    this.onPunch = null;
+    this._spawnPedestrians();
   }
 
-  spawnPedestrians() {
+  _spawnPedestrians() {
+    const palette = [
+      { jacket: 0xc0392b, pants: 0x2c3e50, hair: 0x3a2a1a },
+      { jacket: 0x2980b9, pants: 0x1a1a1a, hair: 0x111111 },
+      { jacket: 0xf39c12, pants: 0x34495e, hair: 0x6b4a2f },
+      { jacket: 0x8e44ad, pants: 0x2c3e50, hair: 0x000000 },
+      { jacket: 0x27ae60, pants: 0x7a6a4a, hair: 0x4a2a1a },
+    ];
     for (let i = 0; i < 22; i++) {
-      const mesh = makePersonMesh(
-        this.rng.pick(PED_SHIRTS),
-        this.rng.pick(PED_PANTS),
-        this.rng.range(0.92, 1.08)
-      );
-      const x = this.rng.range(-160, 160);
-      const z = this.rng.range(-160, 160);
+      const c = this.rng.pick(palette);
+      const mesh = buildPersonMesh(c);
+      const x = this.rng.range(-170, 170);
+      const z = this.rng.range(-170, 170);
       mesh.position.set(x, 0, z);
       this.scene.add(mesh);
       this.pedestrians.push({
-        mesh,
         pos: mesh.position,
         heading: this.rng.range(0, Math.PI * 2),
-        speed: this.rng.range(1.1, 1.8),
-        target: { x: this.rng.range(-160, 160), z: this.rng.range(-160, 160) },
-        flee: 0,
+        mesh,
+        speed: this.rng.range(1.2, 2.2),
+        walkPhase: this.rng.range(0, 6),
+        turnT: this.rng.range(1, 5),
+        fleeT: 0,
       });
     }
   }
 
-  heroMesh() {
-    if (!this.hero.mesh) {
-      // Lena: teal jacket, dark jeans, pink bandana cap.
-      const m = makePersonMesh(0x0e8a8a, 0x1a1a2e, 1.0, 0xe8b088);
-      const cap = new THREE.Mesh(
-        new THREE.SphereGeometry(0.27, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
-        new THREE.MeshStandardMaterial({ color: 0xff5ce1, roughness: 0.6 })
-      );
-      cap.position.y = 1.78;
-      m.add(cap);
-      this.hero.mesh = m;
-      this.scene.add(m);
-    }
-    return this.hero.mesh;
-  }
-
-  spawnThugs(n, center, spread) {
+  spawnThugs(n, x, z) {
     for (let i = 0; i < n; i++) {
-      const mesh = makePersonMesh(0x8a1a1a, 0x1a1a1a, 1.08, 0xc98a5a);
-      const x = center.x + this.rng.range(-spread, spread);
-      const z = center.z + this.rng.range(-spread, spread);
-      mesh.position.set(x, 0, z);
+      const mesh = buildPersonMesh({ jacket: 0x2a2a2a, pants: 0x3a3a3a, hair: 0x1a1a1a, scale: 1.12 });
+      const a = (i / Math.max(n, 1)) * Math.PI * 2;
+      const px = x + Math.cos(a) * this.rng.range(3, 6);
+      const pz = z + Math.sin(a) * this.rng.range(3, 6);
+      mesh.position.set(px, 0, pz);
       this.scene.add(mesh);
-      this.thugs.push({ mesh, pos: mesh.position, hp: 50, attackCd: 0, alive: true, heading: 0 });
+      this.thugs.push({
+        pos: mesh.position,
+        heading: 0,
+        hp: 50,
+        mesh,
+        kind: 'thug',
+        speed: 3.2,
+        attackCooldown: this.rng.range(0.3, 1),
+        walkPhase: this.rng.range(0, 6),
+        punchAnim: 0,
+      });
     }
-    return this.thugs;
   }
 
-  spawnBoss(pos) {
-    const mesh = makePersonMesh(0x1a1a1a, 0x3a2a1a, 1.3, 0xd9a066);
-    // Gold chain.
-    const chain = new THREE.Mesh(
-      new THREE.TorusGeometry(0.3, 0.05, 6, 12),
-      new THREE.MeshStandardMaterial({ color: 0xffd23a, metalness: 0.9, roughness: 0.3 })
-    );
-    chain.position.y = 1.35;
-    chain.rotation.x = Math.PI / 2.4;
-    mesh.add(chain);
-    mesh.position.set(pos.x, 0, pos.z);
+  spawnBoss(x, z) {
+    const mesh = buildPersonMesh({ jacket: 0xe8e8e8, pants: 0x1a1a1a, hair: 0x888888, scale: 1.3 });
+    mesh.position.set(x, 0, z);
     this.scene.add(mesh);
-    this.boss = { mesh, pos: mesh.position, hp: 300, attackCd: 0, alive: true, heading: 0 };
+    this.boss = {
+      pos: mesh.position,
+      heading: 0,
+      hp: 300,
+      mesh,
+      kind: 'boss',
+      speed: 3.6,
+      attackCooldown: 0.5,
+      walkPhase: 0,
+      punchAnim: 0,
+    };
     return this.boss;
-  }
-
-  spawnFootCop(pos) {
-    const mesh = makePersonMesh(0x1a2a5a, 0x1a1a2e, 1.02, 0xc98a5a);
-    const cap = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.28, 0.28, 0.1, 10),
-      new THREE.MeshStandardMaterial({ color: 0x0a1a3a, roughness: 0.5 })
-    );
-    cap.position.y = 1.92;
-    mesh.add(cap);
-    mesh.position.set(pos.x, 0, pos.z);
-    this.scene.add(mesh);
-    const cop = { mesh, pos: mesh.position, touchTimer: 0, giveUp: 0 };
-    this.cops.push(cop);
-    return cop;
   }
 
   clearEnemies() {
     for (const t of this.thugs) this.scene.remove(t.mesh);
     this.thugs = [];
-    if (this.boss) {
-      this.scene.remove(this.boss.mesh);
-      this.boss = null;
-    }
-    for (const c of this.cops) this.scene.remove(c.mesh);
-    this.cops = [];
+    if (this.boss) { this.scene.remove(this.boss.mesh); this.boss = null; }
   }
 
-  // Hero punch: 25 damage to the nearest enemy in front within 2.4 m.
+  hurtHero(amt) {
+    this.hero.hp = Math.max(0, this.hero.hp - amt);
+    this.audio.hurt();
+  }
+
+  // Returns {hit, kind, killed} for the closest enemy in the punch arc,
+  // or null when nothing is in range. Firing it also swings the arm.
   heroPunch() {
+    if (this.punchCooldown > 0 || !this.hero.onFoot) return null;
+    this.punchCooldown = 0.3;
+    this.punchTimer = 0.3;
+    this.audio.punch();
     const h = this.hero;
-    if (h.punchCd > 0 || !h.onFoot) return null;
-    h.punchCd = 0.35;
     const fx = Math.sin(h.heading);
     const fz = Math.cos(h.heading);
     let best = null;
-    let bestD = 2.4;
-    const consider = (target, kind) => {
-      const dx = target.pos.x - h.pos.x;
-      const dz = target.pos.z - h.pos.z;
+    let bestD = 2.6;
+    const targets = [...this.thugs];
+    if (this.boss) targets.push(this.boss);
+    for (const t of targets) {
+      const dx = t.pos.x - h.pos.x;
+      const dz = t.pos.z - h.pos.z;
       const d = Math.sqrt(dx * dx + dz * dz);
-      if (d > bestD) return;
+      if (d > bestD) continue;
       const dot = d > 0.01 ? (dx * fx + dz * fz) / d : 1;
-      if (dot < 0.35) return;
+      if (dot < 0.5) continue; // outside the 60-degree arc
+      best = t;
       bestD = d;
-      best = { target, kind };
-    };
-    for (const t of this.thugs) if (t.alive) consider(t, 'thug');
-    if (this.boss && this.boss.alive) consider(this.boss, 'boss');
-    for (const c of this.cops) consider(c, 'cop');
-    for (const p of this.pedestrians) consider(p, 'ped');
-    if (!best) return { hit: false };
-    if (best.kind === 'ped') {
-      best.target.flee = 3;
-      return { hit: true, kind: 'ped' };
     }
-    if (best.kind === 'cop') {
-      this.scene.remove(best.target.mesh);
-      this.cops.splice(this.cops.indexOf(best.target), 1);
-      if (this.cb.onCopDown) this.cb.onCopDown();
-      return { hit: true, kind: 'cop' };
+    if (!best) return { hit: false, kind: null, killed: false };
+    best.hp -= 25;
+    const killed = best.hp <= 0;
+    if (killed) {
+      this.scene.remove(best.mesh);
+      if (best.kind === 'boss') this.boss = null;
+      else this.thugs.splice(this.thugs.indexOf(best), 1);
+      if (this.onKill) this.onKill(best.kind);
     }
-    best.target.hp -= 25;
-    if (best.target.hp <= 0) {
-      best.target.alive = false;
-      this.scene.remove(best.target.mesh);
-      if (best.kind === 'thug') {
-        this.thugs.splice(this.thugs.indexOf(best.target), 1);
-        if (this.cb.onThugKilled) this.cb.onThugKilled(best.target);
-      } else if (best.kind === 'boss') {
-        if (this.cb.onBossKilled) this.cb.onBossKilled(best.target);
-      }
-      return { hit: true, kind: best.kind, killed: true };
-    }
-    return { hit: true, kind: best.kind, hpLeft: best.target.hp };
-  }
-
-  hurtHero(amount) {
-    const h = this.hero;
-    h.hp = Math.max(0, h.hp - amount);
-    if (this.cb.onHeroHurt) this.cb.onHeroHurt(h.hp);
-    return h.hp;
+    if (this.onPunch) this.onPunch(best.kind, killed);
+    return { hit: true, kind: best.kind, killed };
   }
 
   update(dt, input, driving, camYaw) {
     const h = this.hero;
-    h.punchCd = Math.max(0, h.punchCd - dt);
-    if (h.onFoot && !driving) {
-      const axes = input.axes();
-      const sprint = input.isDown('ShiftLeft') || input.isDown('ShiftRight');
-      const speed = sprint ? 9 : 6;
-      // Camera-relative movement.
-      const fwdX = Math.sin(camYaw);
-      const fwdZ = Math.cos(camYaw);
-      const rightX = Math.cos(camYaw);
-      const rightZ = -Math.sin(camYaw);
-      let mx = fwdX * axes.y + rightX * axes.x;
-      let mz = fwdZ * axes.y + rightZ * axes.x;
-      const len = Math.sqrt(mx * mx + mz * mz);
-      if (len > 0.01) {
-        mx /= len;
-        mz /= len;
-        h.speed = speed;
-        const wantHeading = Math.atan2(mx, mz);
-        let dh = wantHeading - h.heading;
-        while (dh > Math.PI) dh -= Math.PI * 2;
-        while (dh < -Math.PI) dh += Math.PI * 2;
-        h.heading += Math.max(-10 * dt, Math.min(10 * dt, dh));
-        const nx = h.pos.x + mx * speed * dt;
-        const nz = h.pos.z + mz * speed * dt;
-        const fixed = this.city.collideCircle(nx, nz, 0.5);
-        h.pos.x = fixed.x;
-        h.pos.z = fixed.z;
-      } else {
-        h.speed = 0;
-      }
-      // Jump.
-      if ((input.wasPressed('Space') || input.wasPressed('KeyJ')) && h.grounded) {
-        h.vy = 6.5;
-        h.grounded = false;
-      }
-      if (!h.grounded) {
-        h.vy -= 22 * dt;
-        h.pos.y += h.vy * dt;
-        if (h.pos.y <= 0) {
-          h.pos.y = 0;
-          h.vy = 0;
-          h.grounded = true;
-        }
-      }
-      const mesh = this.heroMesh();
-      mesh.position.copy(h.pos);
-      mesh.rotation.y = h.heading;
-      // Walk bob.
-      mesh.position.y = h.pos.y + (h.speed > 0 ? Math.abs(Math.sin(performance.now() / 140)) * 0.06 : 0);
+    this.punchCooldown = Math.max(0, this.punchCooldown - dt);
+    this.punchTimer = Math.max(0, this.punchTimer - dt);
+    if (driving) {
+      h.mesh.visible = false;
+      return;
     }
-
-    // Pedestrians wander; flee when punched.
+    h.mesh.visible = true;
+    const axes = input.axes();
+    const run = input.down('ShiftLeft') || input.down('ShiftRight');
+    const speed = run ? 9 : 6;
+    // Camera-relative movement.
+    const fx = Math.sin(camYaw), fz = Math.cos(camYaw);
+    const rx = Math.cos(camYaw), rz = -Math.sin(camYaw);
+    let mx = fx * axes.y + rx * axes.x;
+    let mz = fz * axes.y + rz * axes.x;
+    const ml = Math.sqrt(mx * mx + mz * mz);
+    if (ml > 0.01) {
+      mx /= ml; mz /= ml;
+      h.heading = Math.atan2(mx, mz);
+      h.pos.x += mx * speed * dt;
+      h.pos.z += mz * speed * dt;
+      h.walkPhase += dt * speed * 1.6;
+    }
+    // Jump.
+    if (input.wasPressed('Space') && h.grounded) {
+      h.vy = 6.5;
+      h.grounded = false;
+    }
+    if (!h.grounded) {
+      h.vy -= 18 * dt;
+      h.pos.y += h.vy * dt;
+      if (h.pos.y <= 0) { h.pos.y = 0; h.vy = 0; h.grounded = true; }
+    }
+    // Keep Lena inside the world and out of buildings.
+    h.pos.x = Math.max(-196, Math.min(196, h.pos.x));
+    h.pos.z = Math.max(-196, Math.min(232, h.pos.z));
+    this.city.resolveCircle(h.pos, 0.6);
+    // Punch key.
+    if (input.wasPressed('KeyF')) this.heroPunch();
+    // Mesh pose.
+    const m = h.mesh;
+    m.position.copy(h.pos);
+    m.rotation.y = h.heading;
+    const swing = ml > 0.01 ? Math.sin(h.walkPhase) * 0.55 : 0;
+    m.userData.legL.rotation.x = swing;
+    m.userData.legR.rotation.x = -swing;
+    m.userData.armL.rotation.x = -swing * 0.7;
+    m.userData.armR.rotation.x = this.punchTimer > 0 ? -1.6 : swing * 0.7;
+    // Pedestrians: stroll, turn sometimes, flee a fight.
     for (const p of this.pedestrians) {
-      let tx = p.target.x;
-      let tz = p.target.z;
-      let sp = p.speed;
-      if (p.flee > 0) {
-        p.flee -= dt;
-        const dx = p.pos.x - h.pos.x;
-        const dz = p.pos.z - h.pos.z;
-        const d = Math.max(0.1, Math.sqrt(dx * dx + dz * dz));
-        tx = p.pos.x + (dx / d) * 20;
-        tz = p.pos.z + (dz / d) * 20;
-        sp = 5;
+      p.turnT -= dt;
+      const dhx = h.pos.x - p.pos.x;
+      const dhz = h.pos.z - p.pos.z;
+      const dh = Math.sqrt(dhx * dhx + dhz * dhz);
+      let spd = p.speed;
+      if (dh < 7 && this.thugs.length + (this.boss ? 1 : 0) > 0) {
+        // Flee from the hero during a brawl.
+        p.heading = Math.atan2(-dhx, -dhz);
+        spd = 5;
+        p.fleeT = 1;
+      } else if (p.turnT <= 0) {
+        p.heading += this.rng.range(-1.2, 1.2);
+        p.turnT = this.rng.range(2, 6);
       }
-      const dx = tx - p.pos.x;
-      const dz = tz - p.pos.z;
-      const d = Math.sqrt(dx * dx + dz * dz);
-      if (d < 1.5) {
-        p.target = { x: this.rng.range(-160, 160), z: this.rng.range(-160, 160) };
-      } else {
-        p.heading = Math.atan2(dx, dz);
-        const nx = p.pos.x + (dx / d) * sp * dt;
-        const nz = p.pos.z + (dz / d) * sp * dt;
-        const fixed = this.city.collideCircle(nx, nz, 0.5);
-        p.pos.x = fixed.x;
-        p.pos.z = fixed.z;
-        p.mesh.rotation.y = p.heading;
+      p.pos.x += Math.sin(p.heading) * spd * dt;
+      p.pos.z += Math.cos(p.heading) * spd * dt;
+      if (p.pos.x > 178 || p.pos.x < -178 || p.pos.z > 178 || p.pos.z < -178) {
+        p.heading += Math.PI;
+        p.pos.x = Math.max(-176, Math.min(176, p.pos.x));
+        p.pos.z = Math.max(-176, Math.min(176, p.pos.z));
       }
+      this.city.resolveCircle(p.pos, 0.6);
+      p.walkPhase += dt * spd * 1.6;
+      p.mesh.rotation.y = p.heading;
+      const sw = Math.sin(p.walkPhase) * 0.5;
+      p.mesh.userData.legL.rotation.x = sw;
+      p.mesh.userData.legR.rotation.x = -sw;
+      p.mesh.userData.armL.rotation.x = -sw * 0.6;
+      p.mesh.userData.armR.rotation.x = sw * 0.6;
     }
-
-    // Thugs chase and punch.
-    for (const t of this.thugs) {
-      if (!t.alive) continue;
-      t.attackCd = Math.max(0, t.attackCd - dt);
-      const dx = h.pos.x - t.pos.x;
-      const dz = h.pos.z - t.pos.z;
+    // Thugs and boss chase Lena and swing when close.
+    const enemies = [...this.thugs];
+    if (this.boss) enemies.push(this.boss);
+    for (const e of enemies) {
+      e.attackCooldown -= dt;
+      e.punchAnim = Math.max(0, e.punchAnim - dt);
+      const dx = h.pos.x - e.pos.x;
+      const dz = h.pos.z - e.pos.z;
       const d = Math.sqrt(dx * dx + dz * dz);
-      if (d < 26 && h.onFoot) {
-        if (d > 1.9) {
-          t.pos.x += (dx / d) * 3.6 * dt;
-          t.pos.z += (dz / d) * 3.6 * dt;
-          const fixed = this.city.collideCircle(t.pos.x, t.pos.z, 0.5);
-          t.pos.x = fixed.x;
-          t.pos.z = fixed.z;
-        } else if (t.attackCd <= 0) {
-          t.attackCd = 1.1;
-          this.hurtHero(6);
-        }
-        t.heading = Math.atan2(dx, dz);
-        t.mesh.rotation.y = t.heading;
-      }
-    }
-
-    // Boss Vic Marino: faster, hits harder.
-    if (this.boss && this.boss.alive) {
-      const b = this.boss;
-      b.attackCd = Math.max(0, b.attackCd - dt);
-      const dx = h.pos.x - b.pos.x;
-      const dz = h.pos.z - b.pos.z;
-      const d = Math.sqrt(dx * dx + dz * dz);
-      if (d < 30 && h.onFoot) {
+      if (d > 0.5) {
+        e.heading = Math.atan2(dx, dz);
         if (d > 2.1) {
-          b.pos.x += (dx / d) * 4.4 * dt;
-          b.pos.z += (dz / d) * 4.4 * dt;
-          const fixed = this.city.collideCircle(b.pos.x, b.pos.z, 0.7);
-          b.pos.x = fixed.x;
-          b.pos.z = fixed.z;
-        } else if (b.attackCd <= 0) {
-          b.attackCd = 1.0;
-          this.hurtHero(14);
+          e.pos.x += Math.sin(e.heading) * e.speed * dt;
+          e.pos.z += Math.cos(e.heading) * e.speed * dt;
+          e.walkPhase += dt * e.speed * 1.6;
         }
-        b.heading = Math.atan2(dx, dz);
-        b.mesh.rotation.y = b.heading;
       }
+      if (d < 2.3 && e.attackCooldown <= 0 && h.hp > 0) {
+        e.attackCooldown = e.kind === 'boss' ? 1.0 : 1.2;
+        e.punchAnim = 0.3;
+        this.hurtHero(e.kind === 'boss' ? 10 : 5);
+      }
+      this.city.resolveCircle(e.pos, 0.7);
+      e.mesh.position.copy(e.pos);
+      e.mesh.rotation.y = e.heading;
+      const sw = Math.sin(e.walkPhase) * 0.5;
+      e.mesh.userData.legL.rotation.x = sw;
+      e.mesh.userData.legR.rotation.x = -sw;
+      e.mesh.userData.armR.rotation.x = e.punchAnim > 0 ? -1.6 : -sw * 0.6;
+      e.mesh.userData.armL.rotation.x = sw * 0.6;
     }
-
-    // Foot cops chase on foot; a sustained touch busts the player.
-    for (const c of [...this.cops]) {
-      const dx = h.pos.x - c.pos.x;
-      const dz = h.pos.z - c.pos.z;
-      const d = Math.sqrt(dx * dx + dz * dz);
-      if (!h.onFoot || d > 60) {
-        c.giveUp += dt;
-        if (c.giveUp > 8) {
-          this.scene.remove(c.mesh);
-          this.cops.splice(this.cops.indexOf(c), 1);
-        }
-        continue;
-      }
-      c.giveUp = 0;
-      if (d > 1.3) {
-        c.touchTimer = 0;
-        c.pos.x += (dx / d) * 5.2 * dt;
-        c.pos.z += (dz / d) * 5.2 * dt;
-        const fixed = this.city.collideCircle(c.pos.x, c.pos.z, 0.5);
-        c.pos.x = fixed.x;
-        c.pos.z = fixed.z;
-      } else {
-        c.touchTimer += dt;
-        if (c.touchTimer > 0.6 && this.cb.onBusted) {
-          this.cb.onBusted();
-          c.touchTimer = 0;
+    // Gentle separation between enemies so they don't stack.
+    for (let i = 0; i < enemies.length; i++) {
+      for (let j = i + 1; j < enemies.length; j++) {
+        const a = enemies[i], b = enemies[j];
+        const dx = b.pos.x - a.pos.x;
+        const dz = b.pos.z - a.pos.z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < 1.44 && d2 > 0.001) {
+          const d = Math.sqrt(d2);
+          const push = (1.2 - d) / 2;
+          a.pos.x -= (dx / d) * push;
+          a.pos.z -= (dz / d) * push;
+          b.pos.x += (dx / d) * push;
+          b.pos.z += (dz / d) * push;
         }
       }
-      c.mesh.rotation.y = Math.atan2(dx, dz);
     }
   }
 }

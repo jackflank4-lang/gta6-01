@@ -1,90 +1,70 @@
-// Screenshot staging for Solmar Bay — Neon Heat.
-// Deterministic scenes for the four required captures. Every shot is
-// staged from the live game (no mock objects), using the shot seed for
-// any placement jitter. Called once from main.js when ?shot= is present.
-// Note: roads run on the lines -176 + 44k; block centres hold buildings,
-// so every staged position sits on a road line or open ground.
-import { Rng } from './rng.js';
-
-export function applyShot(game, name, seed) {
-  const rng = new Rng(seed || 9);
-  const city = game.city;
+// shots.js — deterministic staged scenes for the four screenshots.
+// The driver loads the game with ?shot=<name>&seed=11; the engine calls
+// stageShot() 1.2 s after boot and sets window.__shotReady when the
+// scene is placed. Staged scenes run with staging=true: the world
+// animates but missions and keyboard input stay frozen.
+export function stageShot(game, name) {
   const hero = game.people.hero;
-
   if (name === 'start') {
-    // Title screen: hero on foot at the plaza, high camera over the city.
+    // Title menu over the plaza, tower in frame; the menu orbit camera
+    // does the rest.
     game.state = 'menu';
-    game.hud.showMenu('start');
-    hero.pos.set(10, 0, 30);
-    hero.heading = Math.PI * 0.75;
-    hero.onFoot = true;
-    // The sim does not run in menu state, so place the mesh directly.
-    const mesh = game.people.heroMesh();
-    mesh.position.copy(hero.pos);
-    mesh.rotation.y = hero.heading;
-    game.camMode = 1;
-    game.snapCamera();
+    game.hud.showMenu('menu');
+    game.camYaw = Math.PI * 0.75;
     return;
   }
-
-  // The other three shots need a running game.
-  if (game.state === 'menu') game.newGame();
-
   if (name === 'drive') {
-    // Lena cruising the central boulevard (road z=0) westward in a red
-    // sedan, traffic ahead of her.
-    const car = game.traffic.giveCar('sedan', 150, rng.range(-2, 2), -Math.PI / 2, 0xd83a3a);
-    game.traffic.enterCar(car);
+    // Lena in a red sedan cruising south down the main boulevard,
+    // a yellow taxi ahead of her.
+    game.state = 'playing';
+    game.staging = true;
+    game.hud.showMenu('playing');
+    const car = game.vehicles._addCar(0, -88, 0, false, false, 0xc0392b);
+    game.vehicles.enterCar(car);
     hero.onFoot = false;
-    hero.pos.copy(car.pos);
-    hero.heading = car.heading;
-    car.speed = 16;
-    game.traffic.giveCar('taxi', 110, 0, -Math.PI / 2);
-    game.traffic.giveCar('sedan', 70, 0, -Math.PI / 2);
-    game.camMode = 0;
+    const taxi = game.vehicles._addCar(0, -40, 0, false, false, 0xf39c12);
+    taxi.speed = 9;
+    game.setObjective('Solmar Bay — cruise the boulevard. The city never sleeps.');
+    game.hud.setRadio('NEON FM 92.4 — synthwave');
     game.snapCamera();
     return;
   }
-
   if (name === 'chase') {
-    // Wanted 3: Lena fleeing south on road x=0 in a red sports car, three
-    // cruisers in pursuit behind her.
-    const car = game.traffic.giveCar('sports', 0, 44, 0, 0xd83a3a);
-    game.traffic.enterCar(car);
+    // Wanted 3: Lena in a red sports car, two cruisers flanking her
+    // just ahead in the next lanes — visible in the chase camera.
+    game.state = 'playing';
+    game.staging = true;
+    game.hud.showMenu('playing');
+    const car = game.vehicles._addCar(44, 44, Math.PI / 2, false, false, 0xc0392b);
+    car.topSpeed = 16;
+    game.vehicles.enterCar(car);
     hero.onFoot = false;
-    hero.pos.copy(car.pos);
-    hero.heading = car.heading;
-    car.speed = 22;
-    game.addWanted(3);
-    game.traffic.cruisers.forEach((c, i) => {
-      c.pos.set((i - 1) * 5, 0, 58 + i * 6);
-      c.heading = 0;
-      c.speed = 20;
-    });
-    game.camMode = 0;
+    game.wanted = 3;
+    const c1 = game.vehicles._addCar(70, 40.5, Math.PI / 2, false, true, 0xffffff);
+    c1.speed = 12;
+    const c2 = game.vehicles._addCar(66, 47.5, Math.PI / 2, false, true, 0xffffff);
+    c2.speed = 12;
+    game.setObjective('Wanted: 3 stars. Lose the Solmar Bay PD.');
+    game.hud.setStars(3);
     game.snapCamera();
     return;
   }
-
   if (name === 'mission') {
-    // Mission 5 finale: Lena facing Vic Marino and his crew on the road
-    // south of Meridian Tower. The crew is staged 14 m out so the boss
-    // and his men are visible but cannot reach Lena before the capture.
-    game.missions.start(4);
-    hero.pos.set(16, 0, 10);
-    hero.heading = Math.PI - 0.4; // face north-northwest: the boss shows past Lena
+    // The finale: Lena facing Vic Marino and his crew at Meridian Tower.
+    game.state = 'playing';
+    game.staging = true;
+    game.hud.showMenu('playing');
+    hero.pos.set(20, 0, 8);
+    hero.heading = Math.PI;
+    hero.hp = 100;
     hero.onFoot = true;
-    if (game.traffic.playerCar) game.traffic.exitCar();
-    if (game.people.boss) {
-      game.people.boss.pos.set(city.tower.x, 0, city.tower.z + 20);
-    }
-    game.people.thugs.forEach((t, i) => {
-      t.pos.set(city.tower.x - 12 + i * 8, 0, city.tower.z + 18);
-    });
-    game.camMode = 2;
+    game.people.spawnThugs(4, 22, 0);
+    game.people.spawnBoss(22, -6);
+    game.setObjective('Mission 5 — Neon Heat: take down Vic Marino at Meridian Tower.');
+    game.hud.setHealth(100);
+    game.camYaw = Math.PI;
+    game.camYawOffset = 0;
     game.snapCamera();
     return;
   }
-
-  throw new Error('unknown shot: ' + name);
 }

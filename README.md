@@ -1,73 +1,45 @@
 [![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 [![rank](https://make.fun/badge/gta6-01/jackflank4-lang/gta6-01/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 [![reward](https://make.fun/badge/gta6-01/jackflank4-lang/gta6-01/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+
 # Solmar Bay — Neon Heat
 
-A 3D open-world crime game built for the make.fun **GTA 6** bounty. You are
-**Lena Cruz** of the Barracuda crew, back in Solmar Bay to take the streets
-from boss **Vic Marino** — one stolen car, one job, one neon coin at a time.
+A 3D open-world crime game. You are **Lena Cruz** of the Barracuda crew, working five jobs across a neon dusk city on the bay — and ending it with boss **Vic Marino** (300 HP) at Meridian Tower.
 
 ## Play
 
-Open `game/index.html` in a browser (or run `node serve.ts` and visit the
-printed URL). Click **START NEW GAME**. No build step, no dependencies
-beyond the vendored `three.min.js`.
+Serve the game (`node serve.ts`, then open http://localhost:8080) or open `game/index.html` directly in a desktop browser. No network needed — everything is local, including the vendored three.js.
 
 | Key | Action |
 | --- | --- |
-| W A S D / arrows | Drive / walk |
-| E | Steal / enter a car, exit a car |
-| F / click | Punch |
+| WASD / arrows | Walk / drive |
+| Shift | Run |
+| E | Enter / exit car (stealing one raises your wanted level) |
+| F | Punch |
 | Space | Jump |
 | H | Horn |
-| L | Headlights |
-| N | Radio station (NEON 88.4 / SUNSET 91.1 / CALLE 97.9) |
-| C | Camera: chase / high / close |
-| P / Esc | Pause |
+| N | Next radio station (3 synth stations, all synthesized live) |
+| C | Camera: chase / wide / top-down |
+| P | Pause (auto-saves) |
+| M | Mute |
 
-## The city
+## The five missions
 
-A seeded 8×8-block procedural city (seed 777): 30 m blocks, 14 m roads, a
-bay and beach on the east edge, and five landmarks — **Meridian Tower**
-(92 m), **Luna Casino**, **Rosa's Garage**, **Pelican Diner**, and the
-**Hideout**. Traffic AI drives the lanes and stops at red lights;
-pedestrians wander the sidewalks; police cruisers and foot cops respond to
-your wanted level (0–5 stars).
+1. **Hot Wheels** — steal any car, deliver it to Rosa's Garage. +$350, +$150 if the car arrives undamaged.
+2. **High Roller** — timed delivery to the Luna Casino, 90 seconds. +$550.
+3. **Plaza Brawl** — clear four Barracuda thugs off the plaza. +$450, +$50 per thug.
+4. **Cab Hustle** — three taxi fares across the city. +$250 per fare.
+5. **Neon Heat** — the finale: four thugs plus Vic Marino at Meridian Tower. +$5,000.
 
-## Story missions
+Plus 12 neon coins hidden on the roads (+$40 each), traffic AI, pedestrians, a 0–5 star wanted system with police pursuit, and a save that survives between sessions.
 
-1. **Borrow a Ride** — steal a car, deliver it to Rosa's Garage. $350,
-   +$150 if the car arrives undamaged.
-2. **Sunset Delivery** — reach Luna Casino in 60 seconds. $550.
-3. **Plaza Brawl** — take down 4 thugs at the plaza fountain. $450.
-4. **Taxi Fares** — three pickups and drop-offs across the bay. $750.
-5. **Neon Heat** — defeat Vic Marino (300 HP) and his crew at Meridian
-   Tower. $5,000.
+## Tech
 
-Twelve neon coins are hidden around the city ($40 each). Progress
-autosaves every 30 seconds and on every mission complete
-(`localStorage`, key `solmar-bay-save-v1`); **Continue** resumes it.
+- three.js (vendored, `game/vendor/three.min.js`), WebGL renderer.
+- Deterministic world: seed 777 drives the city layout, traffic and pedestrians, so every run plays the same map.
+- All sound is synthesized with WebAudio — engine hum, sirens, horn, impacts and three radio stations. No audio files.
+- Node 22, standard library only. `main.ts` builds `dossier.json` with the vendored make.fun library.
 
-Getting busted costs $100, getting wasted costs $200 — either way you wake
-up at the Hideout and the crew is still waiting.
+## Credits
 
-## Screenshots
-
-Captured headless at 1280×720 with `?shot=<name>&seed=9`:
-
-- `start.jpg` — title screen over the plaza at dusk
-- `drive.jpg` — cruising the central boulevard
-- `chase.jpg` — wanted level 3, cruisers in pursuit
-- `mission.jpg` — the Neon Heat finale at Meridian Tower
-
-## Build
-
-`main.ts` (Node 22, stdlib only) copies `game/` and `screenshots/` into the
-output directory, validates the screenshots, and writes `dossier.json`
-through the vendored `vendor/makefun-game.ts` helper:
-
-```sh
-node main.ts   # writes /output (or $MAKEFUN_OUTPUT_DIR)
-```
-
-Two runs on the same inputs produce byte-identical output.
+A fan-made tribute built for the make.fun "Make GTA 6" bounty. Not affiliated with Rockstar Games or Take-Two Interactive.
