@@ -322,7 +322,9 @@ export function createGame(canvas, opts = {}) {
     }
     const dist = cameraMode === 0 ? 9 : 17;
     const height = cameraMode === 0 ? 4.2 : 8.5;
-    cameraAngle += (((target.heading + Math.PI) - cameraAngle + Math.PI * 3) % (Math.PI * 2) - Math.PI) * Math.min(1, dt * 3);
+    // Chase camera: sit behind the target (cameraAngle converges on the
+    // target's heading) and look forward past it.
+    cameraAngle += (((target.heading) - cameraAngle + Math.PI * 3) % (Math.PI * 2) - Math.PI) * Math.min(1, dt * 3);
     const cx = target.x - Math.sin(cameraAngle) * dist;
     const cz = target.z - Math.cos(cameraAngle) * dist;
     camera.position.lerp(new THREE.Vector3(cx, target.y + height, cz), 1 - Math.exp(-dt * 5));
@@ -547,6 +549,29 @@ export function createGame(canvas, opts = {}) {
     return car;
   }
 
+  // Put the camera exactly where the chase camera wants to be, right now
+  // (no lerp): screenshot staging calls this so a still is framed even
+  // when the renderer only manages a few frames a second.
+  function snapCamera() {
+    const target = driving && vehicles.playerCar
+      ? { x: vehicles.playerCar.x, z: vehicles.playerCar.z, heading: vehicles.playerCar.heading, y: 0 }
+      : { x: people.hero.x, z: people.hero.z, heading: people.hero.heading, y: people.hero.y };
+    cameraAngle = target.heading;
+    if (cameraMode === 2) {
+      camera.position.set(target.x, 58, target.z + 0.1);
+      camera.lookAt(target.x, 0, target.z);
+      return;
+    }
+    const dist = cameraMode === 0 ? 9 : 17;
+    const height = cameraMode === 0 ? 4.2 : 8.5;
+    camera.position.set(
+      target.x - Math.sin(cameraAngle) * dist,
+      target.y + height,
+      target.z - Math.cos(cameraAngle) * dist,
+    );
+    camera.lookAt(target.x, target.y + 1.6, target.z);
+  }
+
   // ---- debug hooks for the test driver ----
   function debugState() {
     return {
@@ -592,6 +617,7 @@ export function createGame(canvas, opts = {}) {
       hud.showMenu(null);
     },
     setCameraMode(m) { cameraMode = m; },
+    snapCamera,
     get city() { return city; },
     get hero() { return people.hero; },
     get traffic() { return vehicles.traffic; },

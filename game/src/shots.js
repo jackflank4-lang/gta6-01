@@ -26,17 +26,21 @@ export async function stageShot(game, name, seed) {
   game.forcePlay();
 
   if (name === 'drive') {
-    // Lena in a car on a long boulevard at dusk.
+    // Lena in a car on a long boulevard at dusk. Headings run ALONG the
+    // road the car sits on (a road at fixed x runs along z, and vice versa)
+    // so the chase camera behind the car stays on the road too.
     const boulevards = [
-      { x: -88, z: 0, heading: Math.PI / 2 },
-      { x: 0, z: -88, heading: 0 },
-      { x: 88, z: 44, heading: -Math.PI / 2 },
+      { x: -88, z: 0, heading: 0 },
+      { x: 0, z: -88, heading: Math.PI / 2 },
+      { x: 88, z: 44, heading: Math.PI },
     ];
     const spot = boulevards[rng.int(0, boulevards.length - 1)];
-    game.stageInCar(spot.x, spot.z, spot.heading);
+    const car = game.stageInCar(spot.x, spot.z, spot.heading);
+    car.speed = 12; // rolling at ~27 MPH for the still
     game.setCameraMode(0);
-    // Let the car roll a little so the wheels and the city read as motion.
+    game.snapCamera();
     await sleep(900);
+    game.snapCamera();
     window.__shotReady = true;
     return;
   }
@@ -44,13 +48,15 @@ export async function stageShot(game, name, seed) {
   if (name === 'chase') {
     // Wanted 2, two cruisers closing in from behind.
     const spots = [
-      { x: -44, z: 44, heading: Math.PI / 2 },
+      { x: -44, z: 44, heading: 0 },
       { x: 44, z: -44, heading: -Math.PI / 2 },
     ];
     const spot = spots[rng.int(0, spots.length - 1)];
-    game.stageInCar(spot.x, spot.z, spot.heading);
+    const car = game.stageInCar(spot.x, spot.z, spot.heading);
+    car.speed = 12;
     game.setWanted(2);
     game.setCameraMode(0);
+    game.snapCamera();
     // Wait for the cruisers to close in (max 8 s).
     for (let i = 0; i < 40; i += 1) {
       await sleep(200);
@@ -58,20 +64,24 @@ export async function stageShot(game, name, seed) {
       if (s.police >= 1) break;
     }
     await sleep(1200);
+    game.snapCamera();
     window.__shotReady = true;
     return;
   }
 
   if (name === 'mission') {
-    // The boss fight: Lena on foot at Meridian Tower, Vic Marino and his
-    // crew closing in.
+    // The boss fight: Lena on foot just south of Meridian Tower, facing
+    // it — the chase camera behind her lands on the road (clear of
+    // buildings) and the tower, Vic Marino and his crew are all in frame.
     game.setMission(4);
     const t = city.tower;
-    const a = rng.range(0, Math.PI * 2);
-    game.teleport(t.x + Math.sin(a) * 14, t.z + Math.cos(a) * 14);
-    game.setCameraMode(1);
+    game.teleport(t.x, t.z + 8);
+    game.hero.heading = Math.PI;
+    game.setCameraMode(0);
+    game.snapCamera();
     // Let the mission spawn the boss and crew, and let them walk in.
     await sleep(2500);
+    game.snapCamera();
     window.__shotReady = true;
     return;
   }
