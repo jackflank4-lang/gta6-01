@@ -1,85 +1,90 @@
 // Keyboard and mouse input for Solmar Bay.
-// Code-based keys (KeyW, Space, ...) so layouts do not matter. Pressed edges
-// are snapshotted once per frame at the start of the loop (beginFrame), so a
-// slow frame under the software renderer never swallows a key tap.
+// The engine calls beginFrame() once per rendered frame: it snapshots the
+// pressed edges so a key tapped between two slow frames is never swallowed
+// (the software renderer runs a few frames a second, so a 60 ms tap would
+// otherwise fall between frames and vanish).
 export class Input {
   constructor(canvas) {
-    this.held = Object.create(null);
-    this.pressed = Object.create(null);
-    this.released = Object.create(null);
-    this._queue = [];
-    this.mouseDX = 0;
-    this.mouseDY = 0;
-    this.dragging = false;
-    this._lastX = 0;
-    this._lastY = 0;
-
-    window.addEventListener('keydown', (e) => {
+    this.held = new Set();
+    this.pressed = new Set();
+    this._queued = new Set();
+    this.mouseX = 0;
+    this.mouseY = 0;
+    this.mousePressed = false;
+    this._mouseQueued = false;
+    this._canvas = canvas;
+    this._onKeyDown = (e) => {
       if (e.repeat) return;
-      this._queue.push({ code: e.code, down: true });
-      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
-    });
-    window.addEventListener('keyup', (e) => {
-      this._queue.push({ code: e.code, down: false });
-    });
-    window.addEventListener('blur', () => {
-      this.held = Object.create(null);
-      this._queue.length = 0;
-    });
-
-    canvas.addEventListener('mousedown', (e) => {
-      this.dragging = true;
-      this._lastX = e.clientX;
-      this._lastY = e.clientY;
-      this._queue.push({ code: 'Mouse0', down: true });
-    });
-    window.addEventListener('mouseup', (e) => {
-      if (this.dragging) this._queue.push({ code: 'Mouse0', down: false });
-      this.dragging = false;
-    });
-    window.addEventListener('mousemove', (e) => {
-      if (!this.dragging) return;
-      this.mouseDX += e.clientX - this._lastX;
-      this.mouseDY += e.clientY - this._lastY;
-      this._lastX = e.clientX;
-      this._lastY = e.clientY;
-    });
-  }
-
-  // Consume the queued events into held/pressed/released for this frame.
-  beginFrame() {
-    this.pressed = Object.create(null);
-    this.released = Object.create(null);
-    for (const ev of this._queue) {
-      if (ev.down) {
-        if (!this.held[ev.code]) this.pressed[ev.code] = true;
-        this.held[ev.code] = true;
-      } else {
-        if (this.held[ev.code]) this.released[ev.code] = true;
-        this.held[ev.code] = false;
+      if (!this.held.has(e.code)) this._queued.add(e.code);
+      this.held.add(e.code);
+      // Keep the page from scrolling on game keys.
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+        e.preventDefault();
       }
-    }
-    this._queue.length = 0;
+    };
+    this._onKeyUp = (e) => {
+      this.held.delete(e.code);
+    };
+    this._onMouseDown = (e) => {
+      this._mouseQueued = true;
+      this.mouseX = e.clientX;
+      this.mouseY = e.clientY;
+    };
+    this._onMouseMove = (e) => {
+      this.mouseX = e.clientX;
+      this.mouseY = e.clientY;
+    };
+    window.addEventListener('keydown', this._onKeyDown);
+    window.addEventListener('keyup', this._onKeyUp);
+    canvas.addEventListener('mousedown', this._onMouseDown);
+    window.addEventListener('mousemove', this._onMouseMove);
   }
 
-  // Clear the accumulated mouse drag at the end of the frame.
-  endFrame() {
-    this.mouseDX = 0;
-    this.mouseDY = 0;
+  // Snapshot this frame's fresh presses; call once per frame, first thing.
+  beginFrame() {
+    this.pressed = this._queued;
+    this._queued = new Set();
+    this.mousePressed = this._mouseQueued;
+    this._mouseQueued = false;
   }
 
-  isDown(code) { return !!this.held[code]; }
-  wasPressed(code) { return !!this.pressed[code]; }
-  wasReleased(code) { return !!this.released[code]; }
+  down(code) {
+    return this.held.has(code);
+  }
 
-  // Movement keys: WASD or arrows.
-  axis() {
+  // True only on the frame the key went down.
+  hit(code) {
+    return this.pressed.has(code);
+  }
+
+  // Movement axes: -1..1, arrows and WASD both work.
+  moveX() {
     let x = 0;
+    if (this.down('KeyA') || this.down('ArrowLeft')) x -= 1;
+    if (this.down('KeyD') || this.down('ArrowRight')) x += 1;
+    return x;
+  }
+
+  moveY() {
     let y = 0;
-    if (this.isDown('KeyA') || this.isDown('ArrowLeft')) x -= 1;
-    if (this.isDown('KeyD') || this.isDown('ArrowRight')) x += 1;
-    if (this.isDown('KeyW') || this.isDown('ArrowUp')) y += 1;
-    if (this.isDown('KeyS') || this.isDown('ArrowDown')) y -= 1;
-    return { x, y };
+    if (this.down('KeyW') || this.down('ArrowUp')) y += 1;
+    if (this.down('KeyS') || this.down('ArrowDown')) y -= 1;
+    return y;
+  }
+
+  sprint() {
+    return this.down('ShiftLeft') || this.down('ShiftRight');
+  }
+
+  // Any of the pause keys hit this frame.
+  pauseHit() {
+    return this.hit('KeyP') || this.hit('Escape');
+  }
+
+  destroy() {
+    window.removeEventListener('keydown', this._onKeyDown);
+    window.removeEventListener('keyup', this._onKeyUp);
+    this._canvas.removeEventListener('mousedown', this._onMouseDown);
+    window.removeEventListener('mousemove', this._onMouseMove);
   }
 }
