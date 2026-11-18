@@ -365,6 +365,22 @@ export function buildCity(scene, rng) {
     water.position.y = -0.3 + Math.sin(lightTimer * 0.7) * 0.08;
   }
 
+  // True when the traffic light at the central intersection nearest to
+  // (x, z) is red right now. Traffic uses it to stop at red lights.
+  const CENTRAL = [[3, 3], [3, 4], [4, 3], [4, 4]];
+  function lightRedAt(x, z) {
+    for (const [ix, iz] of CENTRAL) {
+      const lx = -HALF + ix * PITCH;
+      const lz = -HALF + iz * PITCH;
+      if (Math.abs(x - lx) < 14 && Math.abs(z - lz) < 14) {
+        const cycle = Math.floor(lightTimer / 6) % 3;
+        const state = (cycle + ((ix + iz) % 2)) % 3;
+        return state === 2;
+      }
+    }
+    return false;
+  }
+
   // A random point on a road (for traffic spawns).
   function roadPoint() {
     const along = rng.range(-HALF + 10, HALF - 10);
@@ -379,6 +395,7 @@ export function buildCity(scene, rng) {
     blocked,
     update,
     roadPoint,
+    lightRedAt,
     garage: pts.garage,
     diner: pts.diner,
     tower: pts.tower,
