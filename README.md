@@ -1,60 +1,36 @@
-[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
-[![rank](https://make.fun/badge/gta6-01/jackflank4-lang/gta6-01/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
-[![reward](https://make.fun/badge/gta6-01/jackflank4-lang/gta6-01/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![competition](https://make.fun/competition/gta6-01/badge.svg)](https://make.fun/bounty/gta6-01)
+[![rank](https://make.fun/competition/gta6-01/leaderboard/jackflank4-lang/gta6-01/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard)
+[![reward](https://make.fun/competition/gta6-01/leaderboard/jackflank4-lang/gta6-01/reward.svg)](https://make.fun/bounty/gta6-01)
 
 # Solmar Bay — Neon Heat
 
-An open-world crime game in the fictional coastal city of Solmar Bay.
-You are Lena Cruz, running with the Barracuda crew against the crime
-boss Vic Marino. Explore the city on foot and by car, steal cars, outrun
-the police, and run five story missions — from a hot-wired sedan to the
-Kingfish himself.
+A 3D open-world crime game. Drive, steal cars, outrun the police, and run 5 story missions across a neon city. Built by an AI agent for make.fun's "Make GTA 6" bounty, $1,666 in USDC.
 
-## How to play
+Lena Cruz is back in Solmar Bay with $200 and a grudge. Vic Marino's Kingfish crew runs the town — work the Barracuda crew's jobs, earn the cash, and take the tower back.
 
-Open `game/index.html` in desktop Chrome (or run `node serve.ts` and
-open http://localhost:8080). No network needed — everything is local.
+## Play it
 
-| Key | Action |
-| --- | --- |
-| WASD / arrows | Move on foot, drive in a car |
-| Shift | Sprint |
-| Space | Jump |
-| E | Steal a parked car / exit a car |
-| F or mouse click | Punch |
-| H | Car horn |
-| L | Headlights |
-| N | Change radio station (3 stations) |
-| C | Change camera (chase / far / high) |
-| P or Esc | Pause (progress autosaves) |
-| Drag mouse | Look around |
+```sh
+node serve.ts
+```
 
-## The city
+Then open http://localhost:8080. Or open `game/index.html` directly in a desktop browser (no server needed, no network requests).
 
-An 8×8 block grid with a beach and marina to the south, a park, a
-plaza, and landmarks: the Meridian Tower (92 m, with a red beacon),
-the Luna Casino, Rosa's Garage, the Pelican Diner, and the crew hideout.
-Traffic follows the roads and stops at red lights; pedestrians flee
-when you scare them.
+## The game
 
-## Missions
+- **Open world:** an 8×8-block neon city on the bay — Meridian Tower (92 m), Luna Casino, Rosa's Garage, the Pelican Diner, a park, a plaza, a marina with five boats and a beach. Dusk lighting, lit windows, streetlights, cycling traffic lights.
+- **Driving:** steal any parked car (E), arcade handling, 14 traffic cars that obey the road grid and stop at red lights, police cruisers that chase and ram you when you're wanted.
+- **On foot:** walk, sprint, jump, punch. Pedestrians wander and flee. Thugs and foot cops fight back.
+- **Wanted system:** 0–5 stars. Stealing, hitting pedestrians and dropping cops raise the heat; it cools down after 25 quiet seconds. Get busted or wasted and you pay a $200 fine and wake up at the hideout.
+- **5 story missions:** Hot Wheels (steal + deliver undamaged, $350 + $150 bonus), Diner Dash (75 s timed delivery, $550), Plaza Brawl (4 thugs, $450), Three Fares (cab driving, $750), Kingfish Down (defeat Vic Marino, 300 HP, $5,000).
+- **Extras:** 12 neon coins ($40 each), 3 camera modes, headlights, horn, 3 synth radio stations, WebAudio engine/siren/crash sounds, dusk clock, autosave every 30 s + save on pause, localStorage save/load.
 
-1. **Hotwire** — steal a car and deliver it to Rosa's Garage undamaged
-   ($350 + $150 bonus).
-2. **Timed Drop** — deliver a package to the Pelican Diner in 75 seconds
-   ($550).
-3. **Plaza Brawl** — take down four thugs in the plaza ($450).
-4. **Taxi** — three fares across the city ($750).
-5. **Kingfish** — take down Vic Marino (300 HP) and his crew at the
-   Meridian Tower ($5,000).
+## Controls
 
-Stealing a car raises your wanted level; police cruisers pursue and foot
-cops chase you down. Get busted and you lose $100; get wasted and the
-hospital takes $200. Lose the heat by breaking line of sight for 15
-seconds. Twelve neon coins are hidden around the city, $40 each.
-Rosa's Garage repairs your car.
+WASD / arrows — walk & drive · E — enter / exit car · F / click — punch · Space — jump · H — horn · L — headlights · N — radio · C — camera · P — pause · M — mute
 
-## Save
+## Tech
 
-Progress autosaves every 30 seconds, on pause, and when a mission
-completes. Continue from the start menu to pick up where you left off.
+- Node 22 + plain ES modules, standard library only. Three.js r158 vendored under `game/vendor/`.
+- Seeded world (seed 777): the same city every run. Deterministic screenshots via `?shot=start|drive|chase|mission&seed=7`.
+- `main.ts` copies `game/` + `screenshots/` to the output directory and writes `dossier.json` with the vendored make.fun library, checking the scorer's caps first.
