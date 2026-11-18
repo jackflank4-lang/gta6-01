@@ -1,21 +1,33 @@
-// Bootstrap for Solmar Bay. Collects page errors into window.__errors (the
-// test driver reads it), parses the query string (?shot=, ?fx=low) and
-// starts the engine, exposing it as window.__game for the driver and the
-// debug hooks.
-import { Engine } from './engine.js';
-
-window.__errors = [];
-window.addEventListener('error', (e) => {
-  window.__errors.push(String(e.message || e.error || 'error'));
-});
-window.addEventListener('unhandledrejection', (e) => {
-  window.__errors.push('rejection: ' + String((e.reason && e.reason.message) || e.reason || ''));
-});
+// Solmar Bay — Neon Heat: bootstrap.
+// Loads the engine, starts it, and stages a screenshot when the page is
+// opened with ?shot=<name>&seed=<n> (the test driver does this).
+// Query params: shot=start|drive|chase|mission, seed (default 1),
+// fx=low (software-renderer friendly: no shadows, capped pixel ratio).
+import { createGame } from './engine.js';
+import { stageShot } from './shots.js';
 
 const params = new URLSearchParams(window.location.search);
-const lowFx = params.get('fx') === 'low';
-const shot = params.get('shot') || null;
+const fxLow = params.get('fx') === 'low';
+const shot = params.get('shot');
+const seed = parseInt(params.get('seed') || '1', 10) || 1;
+
+window.__errors = [];
+window.__shotReady = false;
+window.addEventListener('error', (e) => {
+  window.__errors.push(String(e.message || e.error || 'unknown error'));
+});
+window.addEventListener('unhandledrejection', (e) => {
+  window.__errors.push(String((e.reason && e.reason.message) || e.reason || 'unhandled rejection'));
+});
 
 const canvas = document.getElementById('game');
-const engine = new Engine(canvas, { lowFx, shot });
-window.__game = engine;
+const game = createGame(canvas, { fxLow });
+game.start();
+
+if (shot) {
+  stageShot(game, shot, seed)
+    .catch((e) => {
+      window.__errors.push(String((e && e.message) || e));
+      window.__shotReady = true;
+    });
+}

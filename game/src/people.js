@@ -287,7 +287,6 @@ export function createPeople(scene, city, rng) {
     hero.z = z;
     hero.y = 0;
     hero.vy = 0;
-    hero.hp = 100;
     hero.heading = 0;
     hero.mesh.position.set(x, 0, z);
     hero.mesh.visible = true;

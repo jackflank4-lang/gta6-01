@@ -144,6 +144,16 @@ export function createVehicles(scene, city, rng, audio) {
     return car;
   }
 
+  // Steal a parked car: it stops being parked and becomes the player's car.
+  function stealParked(car) {
+    const idx = parked.indexOf(car);
+    if (idx >= 0) parked.splice(idx, 1);
+    car.parked = false;
+    car.isPlayer = true;
+    playerCar = car;
+    return car;
+  }
+
   function removePlayerCar() {
     if (!playerCar) return;
     scene.remove(playerCar.mesh);
@@ -317,6 +327,7 @@ export function createVehicles(scene, city, rng, audio) {
     spawnPolice,
     removePolice,
     giveCar,
+    stealParked,
     removePlayerCar,
     nearestParked,
     get playerCar() { return playerCar; },
