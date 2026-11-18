@@ -1,98 +1,90 @@
-// Shot staging for Solmar Bay: puts the game into a photogenic state for
-// each of the four screenshots and sets window.__shotReady when the frame
-// is settled. The seed (from ?seed=) picks the staging variant, so a
-// seed=7 run stages differently from a seed=1 run — same game, different
-// angles and positions. Nothing here is a cheat: it only uses the engine's
-// public debug API (teleport, giveCar, setWanted, setMission).
-import { makeRng } from './rng.js';
+// Screenshot staging for Solmar Bay — Neon Heat.
+// Deterministic scenes for the four required captures. Every shot is
+// staged from the live game (no mock objects), using the shot seed for
+// any placement jitter. Called once from main.js when ?shot= is present.
+// Note: roads run on the lines -176 + 44k; block centres hold buildings,
+// so every staged position sits on a road line or open ground.
+import { Rng } from './rng.js';
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-export async function stageShot(game, name, seed) {
-  const rng = makeRng(seed * 101 + 7);
+export function applyShot(game, name, seed) {
+  const rng = new Rng(seed || 9);
   const city = game.city;
-  window.__shotReady = false;
+  const hero = game.people.hero;
 
   if (name === 'start') {
-    // Title menu over the city: the engine's menu camera orbits slowly,
-    // so wait for it to swing over the marina side.
-    game.setCameraMode(0);
-    await sleep(3200);
-    window.__shotReady = true;
+    // Title screen: hero on foot at the plaza, high camera over the city.
+    game.state = 'menu';
+    game.hud.showMenu('start');
+    hero.pos.set(10, 0, 30);
+    hero.heading = Math.PI * 0.75;
+    hero.onFoot = true;
+    // The sim does not run in menu state, so place the mesh directly.
+    const mesh = game.people.heroMesh();
+    mesh.position.copy(hero.pos);
+    mesh.rotation.y = hero.heading;
+    game.camMode = 1;
+    game.snapCamera();
     return;
   }
 
-  // Every other shot plays the game.
-  game.forcePlay();
+  // The other three shots need a running game.
+  if (game.state === 'menu') game.newGame();
 
   if (name === 'drive') {
-    // Lena in a car on a long boulevard at dusk. Headings run ALONG the
-    // road the car sits on (a road at fixed x runs along z, and vice versa)
-    // so the chase camera behind the car stays on the road too.
-    const boulevards = [
-      { x: -88, z: 0, heading: 0 },
-      { x: 0, z: -88, heading: Math.PI / 2 },
-      { x: 88, z: 44, heading: Math.PI },
-    ];
-    const spot = boulevards[rng.int(0, boulevards.length - 1)];
-    const car = game.stageInCar(spot.x, spot.z, spot.heading);
-    car.speed = 12; // rolling at ~27 MPH for the still
-    game.setCameraMode(0);
+    // Lena cruising the central boulevard (road z=0) westward in a red
+    // sedan, traffic ahead of her.
+    const car = game.traffic.giveCar('sedan', 150, rng.range(-2, 2), -Math.PI / 2, 0xd83a3a);
+    game.traffic.enterCar(car);
+    hero.onFoot = false;
+    hero.pos.copy(car.pos);
+    hero.heading = car.heading;
+    car.speed = 16;
+    game.traffic.giveCar('taxi', 110, 0, -Math.PI / 2);
+    game.traffic.giveCar('sedan', 70, 0, -Math.PI / 2);
+    game.camMode = 0;
     game.snapCamera();
-    await sleep(900);
-    game.snapCamera();
-    window.__shotReady = true;
     return;
   }
 
   if (name === 'chase') {
-    // Wanted 2, two cruisers closing in from behind.
-    const spots = [
-      { x: -44, z: 44, heading: 0 },
-      { x: 44, z: -44, heading: -Math.PI / 2 },
-    ];
-    const spot = spots[rng.int(0, spots.length - 1)];
-    const car = game.stageInCar(spot.x, spot.z, spot.heading);
-    car.speed = 12;
-    game.setWanted(2);
-    game.setCameraMode(0);
+    // Wanted 3: Lena fleeing south on road x=0 in a red sports car, three
+    // cruisers in pursuit behind her.
+    const car = game.traffic.giveCar('sports', 0, 44, 0, 0xd83a3a);
+    game.traffic.enterCar(car);
+    hero.onFoot = false;
+    hero.pos.copy(car.pos);
+    hero.heading = car.heading;
+    car.speed = 22;
+    game.addWanted(3);
+    game.traffic.cruisers.forEach((c, i) => {
+      c.pos.set((i - 1) * 5, 0, 58 + i * 6);
+      c.heading = 0;
+      c.speed = 20;
+    });
+    game.camMode = 0;
     game.snapCamera();
-    // Stage two cruisers on the road ahead of the car (they chase toward
-    // it, so their headlights and flashing light bars face the camera).
-    // Spawning them in the shot beats waiting: under the software renderer
-    // the game only simulates a couple of seconds while the page waits.
-    const fx = Math.sin(spot.heading);
-    const fz = Math.cos(spot.heading);
-    const rx = Math.cos(spot.heading);
-    const rz = -Math.sin(spot.heading);
-    game.vehiclesApi.spawnPolice(spot.x + fx * 26, spot.z + fz * 26);
-    game.vehiclesApi.spawnPolice(spot.x + fx * 21 + rx * 5, spot.z + fz * 21 + rz * 5);
-    // Let the cruisers get moving, then re-apply the car's rolling speed
-    // (it decays while the page waits) and frame the shot.
-    await sleep(1500);
-    car.speed = 12;
-    game.snapCamera();
-    window.__shotReady = true;
     return;
   }
 
   if (name === 'mission') {
-    // The boss fight: Lena on foot on the road south of Meridian Tower,
-    // facing it — the chase camera behind her lands on the road (clear of
-    // buildings) and the tower, Vic Marino and his crew are all in frame.
-    game.setMission(4);
-    const t = city.tower;
-    game.teleport(t.x, t.z + 22);
-    game.hero.heading = Math.PI;
-    game.setCameraMode(0);
+    // Mission 5 finale: Lena facing Vic Marino and his crew on the road
+    // south of Meridian Tower. The crew is staged 14 m out so the boss
+    // and his men are visible but cannot reach Lena before the capture.
+    game.missions.start(4);
+    hero.pos.set(16, 0, 10);
+    hero.heading = Math.PI - 0.4; // face north-northwest: the boss shows past Lena
+    hero.onFoot = true;
+    if (game.traffic.playerCar) game.traffic.exitCar();
+    if (game.people.boss) {
+      game.people.boss.pos.set(city.tower.x, 0, city.tower.z + 20);
+    }
+    game.people.thugs.forEach((t, i) => {
+      t.pos.set(city.tower.x - 12 + i * 8, 0, city.tower.z + 18);
+    });
+    game.camMode = 2;
     game.snapCamera();
-    // Let the mission spawn the boss and crew, and let them walk in.
-    await sleep(2500);
-    game.snapCamera();
-    window.__shotReady = true;
     return;
   }
 
-  // Unknown shot name: just mark ready so the driver does not hang.
-  window.__shotReady = true;
+  throw new Error('unknown shot: ' + name);
 }
