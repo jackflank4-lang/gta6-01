@@ -57,17 +57,20 @@ export async function stageShot(game, name, seed) {
     game.setWanted(2);
     game.setCameraMode(0);
     game.snapCamera();
-    // Wait for a cruiser to close to within 18 m of the hero (max 12 s),
-    // so it is actually in the frame when the still is taken.
-    for (let i = 0; i < 60; i += 1) {
-      await sleep(200);
-      const police = game.vehiclesApi.police;
-      const hero = game.hero;
-      let closest = Infinity;
-      for (const p of police) closest = Math.min(closest, Math.hypot(p.x - hero.x, p.z - hero.z));
-      if (closest < 18) break;
-    }
-    await sleep(600);
+    // Stage two cruisers on the road ahead of the car (they chase toward
+    // it, so their headlights and flashing light bars face the camera).
+    // Spawning them in the shot beats waiting: under the software renderer
+    // the game only simulates a couple of seconds while the page waits.
+    const fx = Math.sin(spot.heading);
+    const fz = Math.cos(spot.heading);
+    const rx = Math.cos(spot.heading);
+    const rz = -Math.sin(spot.heading);
+    game.vehiclesApi.spawnPolice(spot.x + fx * 26, spot.z + fz * 26);
+    game.vehiclesApi.spawnPolice(spot.x + fx * 21 + rx * 5, spot.z + fz * 21 + rz * 5);
+    // Let the cruisers get moving, then re-apply the car's rolling speed
+    // (it decays while the page waits) and frame the shot.
+    await sleep(1500);
+    car.speed = 12;
     game.snapCamera();
     window.__shotReady = true;
     return;
