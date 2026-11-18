@@ -57,15 +57,17 @@ export async function stageShot(game, name, seed) {
     game.setWanted(2);
     game.setCameraMode(0);
     game.snapCamera();
-    // Wait for the cruisers to close in (max 8 s), then pull the camera
-    // back to the far view so the cruisers behind the car enter the frame.
-    for (let i = 0; i < 40; i += 1) {
+    // Wait for a cruiser to close to within 18 m of the hero (max 12 s),
+    // so it is actually in the frame when the still is taken.
+    for (let i = 0; i < 60; i += 1) {
       await sleep(200);
-      const s = game.debugState();
-      if (s.police >= 1) break;
+      const police = game.vehiclesApi.police;
+      const hero = game.hero;
+      let closest = Infinity;
+      for (const p of police) closest = Math.min(closest, Math.hypot(p.x - hero.x, p.z - hero.z));
+      if (closest < 18) break;
     }
-    await sleep(1200);
-    game.setCameraMode(1);
+    await sleep(600);
     game.snapCamera();
     window.__shotReady = true;
     return;
