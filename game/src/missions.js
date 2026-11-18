@@ -1,167 +1,185 @@
-// Story missions for Solmar Bay. Five in order: Hotwire, Timed Drop, Plaza
-// Brawl, Taxi (3 fares) and the Kingfish finale. The engine owns the hero,
-// cash and combat; this class owns the mission state, objectives, timers
-// and spawns. update() returns an event when a mission completes or fails.
-export class Missions {
-  constructor(world) {
-    this.world = world;
-    this.index = 0;
-    this.done = false;
-    this.name = '';
-    this.objective = '';
-    this.marker = null; // {x, z} for the beacon + minimap, or null
-    this.timer = 0;
-    this.fare = 0;
-    this.fareStage = 'pickup';
-    this.spawned = false;
-    this.start(0);
+// The five story missions of Solmar Bay. Lena Cruz, fresh in town with
+// $200 and a grudge, works for the Barracuda crew against Vic Marino's
+// Kingfish outfit. The module owns mission state only — the engine owns
+// cash, the hero and the world, and passes them in as W each update.
+// Payouts: 350 (+150 undamaged bonus) / 550 / 450 / 750 / 5000.
+const MISSIONS = [
+  { name: 'Hot Wheels', brief: 'Steal a car and deliver it to Rosa\'s Garage. Bring it back clean for a bonus.' },
+  { name: 'Diner Dash', brief: 'Timed delivery: get to the Pelican Diner in 75 seconds.' },
+  { name: 'Plaza Brawl', brief: 'Four Kingfish thugs are waiting at the plaza. Put them down.' },
+  { name: 'Three Fares', brief: 'Drive the cab: pick up three fares and drop them off.' },
+  { name: 'Kingfish Down', brief: 'Vic Marino is at Meridian Tower with his crew. End it.' },
+];
+
+export function createMissions(city) {
+  let index = 0;
+  let done = false;
+  let phase = 'start'; // per-mission phase
+  let timer = 0;
+  let fare = 0; // fares completed in mission 4
+  let pickup = null; // {x, z} of the current fare's passenger
+  let dropoff = null; // {x, z} of the current fare's destination
+  let thugsSpawned = false;
+  let bossSpawned = false;
+  let stolen = false;
+
+  function resetMissionState() {
+    phase = 'start';
+    timer = 0;
+    fare = 0;
+    pickup = null;
+    dropoff = null;
+    thugsSpawned = false;
+    bossSpawned = false;
+    stolen = false;
   }
 
-  get all() {
-    return [
-      { name: 'Hotwire', payout: 350 },
-      { name: 'Timed Drop', payout: 550 },
-      { name: 'Plaza Brawl', payout: 450 },
-      { name: 'Taxi', payout: 750 },
-      { name: 'Kingfish', payout: 5000 },
-    ];
-  }
-
-  start(i) {
-    this.index = i;
-    this.spawned = false;
-    this.timer = 0;
-    const w = this.world;
-    if (i === 0) {
-      this.name = 'Hotwire';
-      this.objective = 'Steal a car and deliver it to Rosa\'s Garage undamaged';
-      this.marker = { x: w.city.garage.x, z: w.city.garage.z };
-    } else if (i === 1) {
-      this.name = 'Timed Drop';
-      this.objective = 'Deliver the package to the Pelican Diner in 75 seconds';
-      this.marker = { x: w.city.diner.x, z: w.city.diner.z };
-      this.timer = 75;
-    } else if (i === 2) {
-      this.name = 'Plaza Brawl';
-      this.objective = 'Take down all four thugs in the plaza';
-      this.marker = { x: w.city.plaza.x, z: w.city.plaza.z };
-    } else if (i === 3) {
-      this.name = 'Taxi';
-      this.fare = 0;
-      this.fareStage = 'pickup';
-      this.objective = 'Taxi fare 1 of 3: pick up the passenger';
-      this.marker = { x: 0, z: -88 };
-    } else if (i === 4) {
-      this.name = 'Kingfish';
-      this.objective = 'Take down Vic Marino at the Meridian Tower';
-      this.marker = { x: w.city.tower.x, z: w.city.tower.z };
+  function start(i) {
+    index = i;
+    resetMissionState();
+    if (i === 1) timer = 75;
+    if (i === 3) {
+      fare = 0;
+      pickup = null;
+      dropoff = null;
+      phase = 'pickup';
     }
   }
 
-  _farePoints() {
-    return [
-      { pickup: { x: 0, z: -88 }, drop: { x: 110, z: -110 } },
-      { pickup: { x: -88, z: 44 }, drop: { x: 66, z: 110 } },
-      { pickup: { x: 88, z: -44 }, drop: { x: -22, z: -22 } },
-    ];
+  function complete(W, amount, text) {
+    W.addCash(amount, text);
+    if (W.audio) W.audio.missionDone();
+    W.toast(`${MISSIONS[index].name} complete — +$${amount}`);
+    index += 1;
+    if (index >= MISSIONS.length) {
+      done = true;
+      W.toast('Solmar Bay is yours, Lena. Free roam — keep the meter running.');
+    } else {
+      start(index);
+      W.toast(`New mission: ${MISSIONS[index].name} — ${MISSIONS[index].brief}`);
+    }
   }
 
-  _dist(a, b) {
-    const dx = a.x - b.x;
-    const dz = a.z - b.z;
-    return Math.sqrt(dx * dx + dz * dz);
+  function fail(W, text) {
+    W.toast(text);
+    if (W.audio) W.audio.busted();
+    resetMissionState();
+    if (index === 1) timer = 75;
+    if (index === 3) phase = 'pickup';
   }
 
-  update(dt) {
-    const w = this.world;
-    const hero = w.hero;
-    if (this.done) return null;
-
-    if (this.index === 0) {
-      // Hotwire: hero in a car inside the garage beacon.
-      if (hero.inCar && hero.car && this._dist(hero, this.world.city.garage) < 16) {
-        const undamaged = hero.car.damage <= 0;
-        const payout = 350 + (undamaged ? 150 : 0);
-        this._advance();
-        return { done: true, payout, bonus: undamaged ? 150 : 0, message: undamaged ? 'Delivered undamaged — bonus $150!' : 'Car delivered' };
-      }
-      return null;
-    }
-
-    if (this.index === 1) {
-      this.timer -= dt;
-      if (this._dist(hero, this.world.city.diner) < 12) {
-        this._advance();
-        return { done: true, payout: 550, bonus: 0, message: 'Package delivered on time' };
-      }
-      if (this.timer <= 0) {
-        this.timer = 75;
-        return { failed: true, message: 'Too slow — the drop timed out. Try again.' };
-      }
-      return null;
-    }
-
-    if (this.index === 2) {
-      if (!this.spawned) {
-        w.people.spawnThugs(w.city.plaza.x, w.city.plaza.z, 4);
-        this.spawned = true;
-      }
-      const alive = w.people.thugs.filter((t) => t.alive).length;
-      if (alive === 0) {
-        this._advance();
-        return { done: true, payout: 450, bonus: 0, message: 'Plaza cleared' };
-      }
-      return null;
-    }
-
-    if (this.index === 3) {
-      const fares = this._farePoints();
-      const f = fares[this.fare];
-      const target = this.fareStage === 'pickup' ? f.pickup : f.drop;
-      this.marker = target;
-      if (this._dist(hero, target) < 8) {
-        if (this.fareStage === 'pickup') {
-          this.fareStage = 'drop';
-          this.objective = `Taxi fare ${this.fare + 1} of 3: drop the passenger off`;
-          return { progress: true, message: 'Passenger picked up' };
-        }
-        this.fare += 1;
-        if (this.fare >= 3) {
-          this._advance();
-          return { done: true, payout: 750, bonus: 0, message: 'All fares done' };
-        }
-        this.fareStage = 'pickup';
-        this.objective = `Taxi fare ${this.fare + 1} of 3: pick up the passenger`;
-        this.marker = fares[this.fare].pickup;
-        return { progress: true, payout: 250, message: `Fare ${this.fare} done — $250` };
-      }
-      return null;
-    }
-
-    if (this.index === 4) {
-      if (!this.spawned) {
-        w.people.spawnBoss(w.city.tower.x + 6, w.city.tower.z + 6);
-        w.people.spawnThugs(w.city.tower.x, w.city.tower.z, 6);
-        this.spawned = true;
-      }
-      if (w.people.boss && !w.people.boss.alive) {
-        this.done = true;
-        this.name = 'Kingfish';
-        this.objective = 'Solmar Bay is yours, Lena.';
-        this.marker = null;
-        return { done: true, payout: 5000, bonus: 0, message: 'Vic Marino is down. Solmar Bay is yours.' };
-      }
-      return null;
-    }
+  // Current navigation target for the marker / minimap, or null.
+  function markerPos(W) {
+    if (done) return null;
+    if (index === 0) return stolen ? city.garage : null;
+    if (index === 1) return city.diner;
+    if (index === 2) return city.plaza;
+    if (index === 3) return phase === 'pickup' ? pickup : dropoff;
+    if (index === 4) return city.tower;
     return null;
   }
 
-  _advance() {
-    const next = this.index + 1;
-    if (next >= this.all.length) {
-      this.done = true;
-      return;
-    }
-    this.start(next);
+  function objectiveText(W) {
+    if (done) return 'Free roam — Solmar Bay is yours.';
+    if (index === 0) return stolen ? 'Deliver the car to Rosa\'s Garage' : 'Steal a car (walk up and press E)';
+    if (index === 1) return `Reach the Pelican Diner — ${Math.max(0, Math.ceil(timer))}s left`;
+    if (index === 2) return `Defeat the plaza thugs (${W.thugsLeft || 0} left)`;
+    if (index === 3) return phase === 'pickup' ? `Pick up fare ${fare + 1} of 3` : `Drop off fare ${fare + 1} of 3`;
+    if (index === 4) return 'Defeat Vic Marino at Meridian Tower';
+    return '';
   }
+
+  function newFarePoint(W) {
+    const p = city.roadPoint();
+    return { x: p.x, z: p.z };
+  }
+
+  function update(dt, W) {
+    if (done) return;
+    const hero = W.hero;
+    const driving = W.driving;
+    const car = W.car;
+    if (index === 0) {
+      if (driving) stolen = true;
+      if (stolen && driving && car) {
+        const d = Math.hypot(car.x - city.garage.x, car.z - city.garage.z);
+        if (d < 9) {
+          const bonus = car.damage < 5 ? 150 : 0;
+          complete(W, 350 + bonus, 'Hot Wheels');
+          if (bonus > 0) W.toast('Undamaged bonus +$150');
+        }
+      }
+    } else if (index === 1) {
+      timer -= dt;
+      if (timer <= 0) {
+        fail(W, 'Too slow — Diner Dash failed. Try again.');
+        return;
+      }
+      const d = Math.hypot(hero.x - city.diner.x, hero.z - city.diner.z);
+      if (d < 9) complete(W, 550, 'Diner Dash');
+    } else if (index === 2) {
+      if (!thugsSpawned) {
+        thugsSpawned = true;
+        for (let i = 0; i < 4; i += 1) {
+          const a = (i / 4) * Math.PI * 2;
+          W.people.spawnThug(city.plaza.x + Math.sin(a) * 7, city.plaza.z + Math.cos(a) * 7, { hp: 100, dmg: 6 });
+        }
+        W.toast('Four thugs at the plaza. F to punch.');
+      }
+      if (thugsSpawned && W.people.thugs.length === 0) {
+        complete(W, 450, 'Plaza Brawl');
+      }
+    } else if (index === 3) {
+      if (phase === 'pickup' && !pickup) {
+        pickup = newFarePoint(W);
+        W.toast(`Fare ${fare + 1}: passenger waiting — follow the gold marker.`);
+      }
+      if (phase === 'pickup' && pickup && driving && car) {
+        const d = Math.hypot(car.x - pickup.x, car.z - pickup.z);
+        if (d < 5) {
+          pickup = null;
+          dropoff = newFarePoint(W);
+          phase = 'dropoff';
+          W.toast('Passenger aboard — take them to the marker.');
+        }
+      }
+      if (phase === 'dropoff' && dropoff && driving && car) {
+        const d = Math.hypot(car.x - dropoff.x, car.z - dropoff.z);
+        if (d < 5) {
+          fare += 1;
+          W.addCash(250, `Fare ${fare}`);
+          W.toast(`Fare ${fare} of 3 paid +$250`);
+          dropoff = null;
+          if (fare >= 3) {
+            complete(W, 0, 'Three Fares');
+          } else {
+            phase = 'pickup';
+          }
+        }
+      }
+    } else if (index === 4) {
+      if (!bossSpawned) {
+        bossSpawned = true;
+        const t = city.tower;
+        W.people.spawnThug(t.x + 6, t.z + 6, { hp: 300, dmg: 10, scale: 1.35, shirt: 0x111111, isBoss: true, name: 'Vic Marino', reward: 500 });
+        for (let i = 0; i < 3; i += 1) {
+          const a = (i / 3) * Math.PI * 2;
+          W.people.spawnThug(t.x + Math.sin(a) * 10, t.z + Math.cos(a) * 10, { hp: 120, dmg: 8 });
+        }
+        W.toast('Vic Marino is at the tower. Take him down.');
+      }
+      if (bossSpawned && !W.people.boss) {
+        complete(W, 5000, 'Kingfish Down');
+      }
+    }
+  }
+
+  return {
+    update, start, markerPos, objectiveText,
+    get index() { return index; },
+    get done() { return done; },
+    get name() { return done ? 'Free Roam' : MISSIONS[index].name; },
+    get brief() { return done ? 'Solmar Bay is yours.' : MISSIONS[index].brief; },
+    setIndex(i) { start(i); },
+  };
 }
