@@ -1,70 +1,87 @@
-// shots.js — deterministic staged scenes for the four screenshots.
-// The driver loads the game with ?shot=<name>&seed=11; the engine calls
-// stageShot() 1.2 s after boot and sets window.__shotReady when the
-// scene is placed. Staged scenes run with staging=true: the world
-// animates but missions and keyboard input stay frozen.
-export function stageShot(game, name) {
-  const hero = game.people.hero;
+// Screenshot staging for Solmar Bay (v10): four deterministic views reached
+// by query (?shot=start|drive|chase|mission&seed=N). The seed drives the
+// staging randomness (car colour, traffic jitter) so the shots match the
+// manifest. The engine sets window.__shotReady after the staged scene has
+// rendered a couple of frames.
+
+import { createRng } from './rng.js';
+
+const CAR_PAINTS = [0xc22a2a, 0x2a5ac2, 0x1a8a4a, 0xd4a21a, 0x222222, 0x7a2ad4];
+
+export function applyShot(game, name, seed) {
+  const rng = createRng(seed * 7919 + 13);
+  const { city, people, vehicles } = game;
+  game.clockMinutes = 19 * 60 + 40; // dusk, fixed for every shot
+
   if (name === 'start') {
-    // Title menu over the plaza, tower in frame; the menu orbit camera
-    // does the rest.
+    // Title menu over the dusk city: hero on the plaza, camera high looking
+    // north across the tower and the bay behind the menu overlay.
     game.state = 'menu';
-    game.hud.showMenu('menu');
-    game.camYaw = Math.PI * 0.75;
-    return;
+    game.hero.pos.set(city.plaza.x, 0, city.plaza.z + 6);
+    game.hero.heading = Math.PI;
+    game.hero.mesh.rotation.y = game.hero.heading;
+    game.fixedCamera = { x: 60, y: 42, z: 120, tx: 0, ty: 14, tz: -60 };
+    game.hud.showMenu('start');
+    return true;
   }
+
+  game.state = 'playing';
+  game.hud.showMenu(null);
+  game.input.setEnabled(true);
+
   if (name === 'drive') {
-    // Lena in a red sedan cruising south down the main boulevard,
-    // a yellow taxi ahead of her.
-    game.state = 'playing';
-    game.staging = true;
-    game.hud.showMenu('playing');
-    const car = game.vehicles._addCar(0, -88, 0, false, false, 0xc0392b);
-    game.vehicles.enterCar(car);
-    hero.onFoot = false;
-    const taxi = game.vehicles._addCar(0, -40, 0, false, false, 0xf39c12);
-    taxi.speed = 9;
-    game.setObjective('Solmar Bay — cruise the boulevard. The city never sleeps.');
-    game.hud.setRadio('NEON FM 92.4 — synthwave');
+    // Driving north on the central boulevard, minimap and HUD visible.
+    const car = vehicles.giveCar('sedan', 0, 30, Math.PI);
+    // Seed-picked paint so the shot differs per seed.
+    const body = car.mesh.children[0];
+    if (body) body.material = new window.THREE.MeshLambertMaterial({ color: CAR_PAINTS[rng.int(0, CAR_PAINTS.length - 1)] });
+    car.speed = 15;
+    game.wanted = 0;
+    game.vehicles.removePolice(0);
+    game.missions.setIndex(0);
     game.snapCamera();
-    return;
+    return true;
   }
+
   if (name === 'chase') {
-    // Wanted 3: Lena in a red sports car, two cruisers flanking her
-    // just ahead in the next lanes — visible in the chase camera.
-    game.state = 'playing';
-    game.staging = true;
-    game.hud.showMenu('playing');
-    const car = game.vehicles._addCar(44, 44, Math.PI / 2, false, false, 0xc0392b);
-    car.topSpeed = 16;
-    game.vehicles.enterCar(car);
-    hero.onFoot = false;
-    game.wanted = 3;
-    const c1 = game.vehicles._addCar(70, 40.5, Math.PI / 2, false, true, 0xffffff);
-    c1.speed = 12;
-    const c2 = game.vehicles._addCar(66, 47.5, Math.PI / 2, false, true, 0xffffff);
-    c2.speed = 12;
-    game.setObjective('Wanted: 3 stars. Lose the Solmar Bay PD.');
-    game.hud.setStars(3);
+    // Wanted chase: 3 stars, three cruisers closing in. The cruisers are
+    // staged AHEAD of the player car on the same road, so the chase camera
+    // (behind the player) sees them; the pursuit AI then drives them at the
+    // player and they cluster around the car by capture time.
+    const car = vehicles.giveCar('sports', -40, 0, Math.PI / 2);
+    car.speed = 12;
+    game.setWanted(3);
+    game.vehicles.spawnPolice(3, { x: -40, z: 0 });
+    const spots = [[-16, 5], [-8, -5], [2, 2]];
+    game.vehicles.police.forEach((cop, i) => {
+      const s = spots[i % spots.length];
+      cop.mesh.position.set(s[0], 0, s[1]);
+      cop.heading = Math.PI / 2;
+      cop.mesh.rotation.y = cop.heading;
+      cop.speed = 12;
+    });
+    game.missions.setIndex(1);
     game.snapCamera();
-    return;
+    return true;
   }
+
   if (name === 'mission') {
-    // The finale: Lena facing Vic Marino and his crew at Meridian Tower.
-    game.state = 'playing';
-    game.staging = true;
-    game.hud.showMenu('playing');
-    hero.pos.set(20, 0, 8);
-    hero.heading = Math.PI;
-    hero.hp = 100;
-    hero.onFoot = true;
-    game.people.spawnThugs(4, 22, 0);
-    game.people.spawnBoss(22, -6);
-    game.setObjective('Mission 5 — Neon Heat: take down Vic Marino at Meridian Tower.');
-    game.hud.setHealth(100);
-    game.camYaw = Math.PI;
-    game.camYawOffset = 0;
+    // Finale: Lena on foot facing Vic Marino and his crew at the tower.
+    game.missions.setIndex(4);
+    game.missions.update(0.01); // spawns the boss + crew
+    game.hero.pos.set(22, 0, -18);
+    game.hero.heading = Math.PI;
+    game.hero.mesh.rotation.y = game.hero.heading;
+    game.hero.mesh.visible = true;
+    game.wanted = 2;
+    game.vehicles.spawnPolice(1, { x: 22, z: -18 });
     game.snapCamera();
-    return;
+    return true;
   }
+
+  return false;
+}
+
+export function shotNames() {
+  return ['start', 'drive', 'chase', 'mission'];
 }

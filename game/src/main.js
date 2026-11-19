@@ -1,23 +1,15 @@
-// main.js — bootstrap for Solmar Bay.
-// Exposes window.__game (the engine) and window.__errors (every page
-// error, so the test driver can fail loudly on any exception).
-import { Game } from './engine.js';
+// Bootstrap for Solmar Bay (v10): reads the query flags (?fx=low for the
+// low-effects mode, ?shot=...&seed=... for deterministic screenshot staging)
+// and starts the engine. Page errors are collected by the inline script in
+// index.html (it runs before this module, so it also catches module load
+// errors) into window.__errors.
 
-window.__errors = [];
-window.addEventListener('error', (e) => {
-  window.__errors.push(String(e.message || e.error || 'unknown error'));
-});
-const _consoleError = console.error.bind(console);
-console.error = (...args) => {
-  window.__errors.push(args.map((a) => String(a)).join(' '));
-  _consoleError(...args);
-};
+import { createGame } from './engine.js';
 
-try {
-  const game = new Game();
-  window.__game = game;
-  window.__shotReady = false;
-} catch (err) {
-  window.__errors.push('boot failed: ' + String(err && err.message ? err.message : err));
-  throw err;
-}
+const params = new URLSearchParams(window.location.search);
+const fxLow = params.get('fx') === 'low';
+
+if (!window.__errors) window.__errors = [];
+if (typeof window.__shotReady === 'undefined') window.__shotReady = false;
+
+createGame({ fxLow });

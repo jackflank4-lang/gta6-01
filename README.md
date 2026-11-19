@@ -4,42 +4,98 @@
 
 # Solmar Bay — Neon Heat
 
-A 3D open-world crime game. You are **Lena Cruz** of the Barracuda crew, working five jobs across a neon dusk city on the bay — and ending it with boss **Vic Marino** (300 HP) at Meridian Tower.
+An open-world crime game in the dusk-lit coastal city of Solmar Bay, built for
+the make.fun "Make GTA 6" bounty. You are Lena Cruz of the Barracuda crew,
+taking the city back from crime boss Vic Marino — on foot and by car, with
+traffic, pedestrians, police, five story missions, combat, collectibles, a
+minimap, a save system and synthesised sound. It runs offline in a desktop
+browser from static files, no network request, no build step.
 
-## Play
+## Play it
 
-Serve the game (`node serve.ts`, then open http://localhost:8080) or open `game/index.html` directly in a desktop browser. No network needed — everything is local, including the vendored three.js.
+```sh
+node serve.ts
+# open http://localhost:8080
+```
+
+Or open `game/index.html` directly from the files (the game loads only files
+under `game/`). Add `?fx=low` for the low-effects mode (no shadows, no
+antialiasing) on weak machines.
+
+## Controls
 
 | Key | Action |
 | --- | --- |
-| WASD / arrows | Walk / drive |
-| Shift | Run |
-| E | Enter / exit car (stealing one raises your wanted level) |
-| F | Punch |
+| WASD / Arrows | Move on foot, drive in a car |
+| Shift | Sprint |
+| E | Enter / exit a car (stealing one adds a wanted star) |
+| F / Click | Punch |
 | Space | Jump |
-| H | Horn |
-| N | Next radio station (3 synth stations, all synthesized live) |
-| C | Camera: chase / wide / top-down |
-| P | Pause (auto-saves) |
-| M | Mute |
+| H | Car horn (scares pedestrians) |
+| L | Headlights |
+| N | Change radio station (3 stations) |
+| C | Camera (near / far / top) |
+| P / Esc | Pause (autosaves) |
 
-## The five missions
+## The city
 
-1. **Hot Wheels** — steal any car, deliver it to Rosa's Garage. +$350, +$150 if the car arrives undamaged.
-2. **High Roller** — timed delivery to the Luna Casino, 90 seconds. +$550.
-3. **Plaza Brawl** — clear four Barracuda thugs off the plaza. +$450, +$50 per thug.
-4. **Cab Hustle** — three taxi fares across the city. +$250 per fare.
-5. **Neon Heat** — the finale: four thugs plus Vic Marino at Meridian Tower. +$5,000.
+Solmar Bay is an 8×8 block grid (30 m blocks, 14 m roads) with a park, a
+plaza, a beach and a marina, and landmarks you will learn by heart: the
+92 m Meridian Tower with its sweeping beacon, the Luna Casino, Rosa's Garage,
+the Pelican Diner and the crew hideout. The layout is seeded, so the city is
+the same every run. Traffic (about 14 cars) obeys the lights; about 22
+pedestrians wander the sidewalks and flee when scared.
 
-Plus 12 neon coins hidden on the roads (+$40 each), traffic AI, pedestrians, a 0–5 star wanted system with police pursuit, and a save that survives between sessions.
+## Missions
 
-## Tech
+Five story missions, in order, with cash payouts:
 
-- three.js (vendored, `game/vendor/three.min.js`), WebGL renderer.
-- Deterministic world: seed 777 drives the city layout, traffic and pedestrians, so every run plays the same map.
-- All sound is synthesized with WebAudio — engine hum, sirens, horn, impacts and three radio stations. No audio files.
-- Node 22, standard library only. `main.ts` builds `dossier.json` with the vendored make.fun library.
+1. **Hot Wheels** — steal a car and deliver it to Rosa's Garage. $350, plus
+   a $150 bonus if it arrives undamaged.
+2. **Neon Run** — timed delivery to the Marina, 90 seconds. $550.
+3. **Plaza Brawl** — beat the four thugs in the plaza. $450.
+4. **Night Shift** — three taxi fares across town. $750.
+5. **Kingfish** — the finale: take down Vic Marino (300 HP) and his crew at
+   the Meridian Tower. $5,000.
 
-## Credits
+You start with $200 and 100 health. Twelve neon coins are hidden around the
+city ($40 each), and every thug you put down pays $25. Rosa's Garage repairs
+a damaged car for $25.
 
-A fan-made tribute built for the make.fun "Make GTA 6" bounty. Not affiliated with Rockstar Games or Take-Two Interactive.
+## Wanted
+
+0–5 stars. Stealing a car, hitting a cop, or causing mayhem raises it; up to
+four police cruisers pursue and ram, and foot cops chase you down. Get caught
+and you are **busted** (10% fine); get beaten and you are **wasted** (15%
+fine). Lay low for a while and the heat falls.
+
+## Save
+
+The game autosaves every 30 seconds, on pause and on mission completion, to
+local storage. Continue from the menu restores your cash, mission and
+position.
+
+## Sound
+
+All sound is synthesised with WebAudio — engine hum, sirens, horn, crashes,
+punch and coin chimes, and three original radio tracks. No audio files.
+
+## Files
+
+- `game/index.html` — canvas + HUD (cash, health, stars, clock, speed,
+  objective, toasts, circular minimap, menus).
+- `game/src/` — one module per system: `rng` (seeded random), `input`,
+  `audio`, `city` (generation + landmarks + collision), `vehicles` (cars,
+  traffic AI, police, driving), `people` (hero, pedestrians, thugs, cops,
+  boss), `missions`, `hud`, `shots` (deterministic screenshot staging),
+  `engine` (loop, wanted, combat, coins, save/load), `main` (bootstrap).
+- `game/vendor/three.min.js` — vendored Three.js.
+- `main.ts` — the entry program: copies `game/` + `screenshots/` to the
+  output directory and writes `dossier.json`.
+- `serve.ts` — tiny static server for local play.
+- `screenshots/` — four real renders of the game (title, driving, chase,
+  finale), listed in `shots.json`.
+
+## Licence
+
+MIT — see `LICENSE`.

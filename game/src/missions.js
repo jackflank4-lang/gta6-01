@@ -1,156 +1,222 @@
-// missions.js — Lena's five jobs for the Barracuda crew.
-// 1 Hot Wheels: steal any car, deliver it to Rosa's Garage.
-// 2 High Roller: timed delivery to the Luna Casino (90 s).
-// 3 Plaza Brawl: clear four Barracuda thugs off the plaza.
-// 4 Cab Hustle: three taxi fares across the city.
-// 5 Neon Heat: the finale — four thugs plus boss Vic Marino (300 HP)
-//    at the Meridian Tower plaza. Pays $5,000.
-const FARES = [
-  { pickup: [-22, 88], drop: [110, -44] },
-  { pickup: [-66, 44], drop: [22, 0] },
-  { pickup: [132, 66], drop: [-88, 132] },
+// Story missions for Solmar Bay (v10): five missions in order, each with a
+// cash payout. The engine drives the checks (position, car, enemies down);
+// this module owns the mission state, the objective text and the 3D beacon
+// that marks the current target.
+
+const DEFS = [
+  { name: 'Hot Wheels', payout: 350, intro: "Steal a car and bring it to Rosa's Garage." },
+  { name: 'Neon Run', payout: 550, intro: 'Timed delivery: reach the Marina in 90 seconds.' },
+  { name: 'Plaza Brawl', payout: 450, intro: 'Beat the 4 thugs in the plaza.' },
+  { name: 'Night Shift', payout: 750, intro: 'Three taxi fares. Pick up, drop off, get paid.' },
+  { name: 'Kingfish', payout: 5000, intro: 'Take down Vic Marino at the Meridian Tower.' },
 ];
 
-export const MISSION_NAMES = ['Hot Wheels', 'High Roller', 'Plaza Brawl', 'Cab Hustle', 'Neon Heat'];
-// Completion bonus per mission. Cab Hustle pays $0 here because its
-// three fares already pay $250 each as they are delivered.
-export const MISSION_PAY = [350, 550, 450, 0, 5000];
+export function createMissions(game) {
+  const THREE = window.THREE;
+  const { scene, city, people, rng } = game;
 
-export class Missions {
-  constructor(game) {
-    this.game = game;
-    this.index = 0; // active mission, 0..4; 5 = story complete
-    this.objective = '';
-    this.timer = 0;
-    this.fareIndex = 0;
-    this.fareStage = 'pickup'; // 'pickup' | 'drop'
-    this.started = false;
-    this._announce();
+  const beaconMat = new THREE.MeshBasicMaterial({
+    color: 0x22e5ff, transparent: true, opacity: 0.28, depthWrite: false,
+  });
+  const beacon = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 34, 16, 1, true), beaconMat);
+  beacon.position.y = 17;
+  beacon.visible = false;
+  scene.add(beacon);
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(2.2, 3.2, 24),
+    new THREE.MeshBasicMaterial({ color: 0x22e5ff, transparent: true, opacity: 0.7, side: THREE.DoubleSide }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.15;
+  ring.visible = false;
+  scene.add(ring);
+
+  let index = 0; // 0..4 active, 5 = all done
+  let phase = 'needCar';
+  let timer = 0;
+  let faresDone = 0;
+  let fareState = 'toPickup';
+  let pickup = null;
+  let dest = null;
+  let spawned = false;
+
+  function marker() {
+    if (index >= 5) return null;
+    if (index === 0) return phase === 'deliver' ? { x: city.garage.x, z: city.garage.z } : null;
+    if (index === 1) return { x: city.marina.x, z: city.marina.z - 6 };
+    if (index === 2) return { x: city.plaza.x, z: city.plaza.z };
+    if (index === 3) return fareState === 'toPickup' ? pickup : dest;
+    if (index === 4) return { x: city.tower.x, z: city.tower.z + 22 };
+    return null;
   }
 
-  _announce() {
-    const g = this.game;
-    if (this.index >= 5) {
-      this.objective = 'All missions complete. Solmar Bay is yours, Lena.';
-      g.setObjective(this.objective);
+  function objective() {
+    if (index >= 5) return 'Solmar Bay is yours — free roam. Buy low, sell high, stay free.';
+    if (index === 0) return phase === 'needCar' ? 'Mission 1 — Hot Wheels: steal a car (E near a parked car).' : "Mission 1 — Hot Wheels: deliver the car to Rosa's Garage.";
+    if (index === 1) return `Mission 2 — Neon Run: reach the Marina. ${Math.ceil(timer)}s left.`;
+    if (index === 2) return `Mission 3 — Plaza Brawl: thugs down ${people.countThugsDown(true)}/4.`;
+    if (index === 3) return `Mission 4 — Night Shift: fares ${faresDone}/3 — ${fareState === 'toPickup' ? 'pick up the fare' : 'drop off the fare'}.`;
+    if (index === 4) return 'Mission 5 — Kingfish: take down Vic Marino at the Meridian Tower.';
+    return '';
+  }
+
+  function startMission(i) {
+    index = i;
+    spawned = false;
+    if (i === 0) phase = 'needCar';
+    if (i === 1) { phase = 'drive'; timer = 90; }
+    if (i === 2) { phase = 'fight'; }
+    if (i === 3) { phase = 'taxi'; faresDone = 0; fareState = 'toPickup'; newFare(); }
+    if (i === 4) { phase = 'boss'; }
+    if (i < 5) game.toast(`Mission ${i + 1} — ${DEFS[i].name}: ${DEFS[i].intro}`);
+  }
+
+  function newFare() {
+    pickup = city.randomSidewalkPoint();
+    // Destination: a different sidewalk point at least 80 m away.
+    let d = city.randomSidewalkPoint();
+    let guard = 0;
+    while (Math.hypot(d.x - pickup.x, d.z - pickup.z) < 80 && guard < 20) {
+      d = city.randomSidewalkPoint();
+      guard += 1;
+    }
+    dest = d;
+    fareState = 'toPickup';
+  }
+
+  function complete(payout, bonus) {
+    const total = payout + (bonus || 0);
+    const doneIdx = index;
+    game.addCash(total);
+    game.audio.missionDone();
+    game.toast(`Mission ${doneIdx + 1} complete — +$${total}${bonus ? ` (incl. $${bonus} bonus)` : ''}.`);
+    const next = index + 1;
+    if (next >= 5) {
+      index = 5;
+      game.toast('All missions done. Solmar Bay is yours, Lena.');
+    } else {
+      startMission(next);
+    }
+    // Save AFTER the index advanced, so a Continue restores the new mission.
+    game.onMissionComplete();
+  }
+
+  function update(dt) {
+    if (index >= 5) {
+      beacon.visible = false;
+      ring.visible = false;
       return;
     }
-    switch (this.index) {
-      case 0:
-        this.objective = 'Mission 1 — Hot Wheels: steal a car and deliver it to Rosa\'s Garage.';
-        break;
-      case 1:
-        this.timer = 90;
-        this.objective = 'Mission 2 — High Roller: deliver the car to the Luna Casino. 90s on the clock.';
-        break;
-      case 2:
-        this.objective = 'Mission 3 — Plaza Brawl: clear the Barracudas off the plaza.';
-        g.people.spawnThugs(4, 22, 22);
-        break;
-      case 3:
-        this.fareIndex = 0;
-        this.fareStage = 'pickup';
-        this.objective = 'Mission 4 — Cab Hustle: pick up fare 1 of 3.';
-        break;
-      case 4:
-        this.objective = 'Mission 5 — Neon Heat: take down Vic Marino at Meridian Tower.';
-        g.people.spawnThugs(4, 22, 0);
-        g.people.spawnBoss(22, -6);
-        break;
+    const m = marker();
+    if (m) {
+      beacon.visible = true;
+      ring.visible = true;
+      beacon.position.x = m.x;
+      beacon.position.z = m.z;
+      ring.position.x = m.x;
+      ring.position.z = m.z;
+      beaconMat.opacity = 0.22 + 0.12 * Math.sin(game.time * 3);
+    } else {
+      beacon.visible = false;
+      ring.visible = false;
     }
-    g.setObjective(this.objective);
-  }
 
-  _complete() {
-    const g = this.game;
-    const pay = MISSION_PAY[this.index];
-    let bonus = 0;
-    let note = '';
-    if (this.index === 0) {
-      const car = g.vehicles.playerCar;
-      if (car && car.damage === 0) { bonus = 150; note = ' Undamaged delivery: +$150.'; }
-    }
-    g.addCash(pay + bonus, MISSION_NAMES[this.index]);
-    g.audio.mission();
-    const payText = pay + bonus > 0 ? ` +$${pay + bonus}` : '';
-    g.toast(`Mission complete: ${MISSION_NAMES[this.index]}${payText}.${note}`);
-    this.index++;
-    this._announce();
-    if (this.index >= 5) g.onStoryComplete();
-  }
+    const heroPos = game.hero.pos;
+    const inCar = !!game.vehicles.playerCar;
 
-  _dist2(x, z, tx, tz) {
-    const dx = x - tx, dz = z - tz;
-    return dx * dx + dz * dz;
-  }
-
-  update(dt) {
-    const g = this.game;
-    if (this.index >= 5 || !g.playing) return;
-    const car = g.vehicles.playerCar;
-    const hero = g.people.hero;
-    const px = car ? car.pos.x : hero.pos.x;
-    const pz = car ? car.pos.z : hero.pos.z;
-    switch (this.index) {
-      case 0: {
-        if (car) {
-          const lm = g.city.landmarks.garage;
-          if (this._dist2(px, pz, lm.x, lm.z) < lm.radius * lm.radius) this._complete();
+    if (index === 0) {
+      if (phase === 'needCar' && inCar) {
+        phase = 'deliver';
+        game.toast("Now deliver it to Rosa's Garage — undamaged pays +$150.");
+      } else if (phase === 'deliver' && inCar) {
+        const d = Math.hypot(heroPos.x - city.garage.x, heroPos.z - city.garage.z);
+        // Hero pos follows the car while driving (engine keeps them in sync).
+        const car = game.vehicles.playerCar;
+        const cd = Math.hypot(car.mesh.position.x - city.garage.x, car.mesh.position.z - city.garage.z);
+        if (Math.min(d, cd) < 9) {
+          const bonus = car.damage === 0 ? 150 : 0;
+          complete(DEFS[0].payout, bonus);
         }
-        break;
       }
-      case 1: {
-        this.timer -= dt;
-        const lm = g.city.landmarks.casino;
-        if (car && this._dist2(px, pz, lm.x, lm.z) < lm.radius * lm.radius) {
-          this._complete();
-          break;
+    } else if (index === 1) {
+      timer -= dt;
+      if (timer <= 0) {
+        timer = 90;
+        game.toast('Neon Run: too slow — try again, 90 seconds on the clock.');
+      } else {
+        const d = Math.hypot(heroPos.x - city.marina.x, heroPos.z - (city.marina.z - 6));
+        if (d < 10) complete(DEFS[1].payout, 0);
+      }
+    } else if (index === 2) {
+      if (!spawned) {
+        spawned = true;
+        for (let i = 0; i < 4; i += 1) {
+          people.spawnThug(city.plaza.x + [-8, 8, -4, 4][i], city.plaza.z + [-6, 6, 8, -8][i], 60, true);
         }
-        if (this.timer <= 0) {
-          this.timer = 90;
-          g.toast('Too slow — the casino job is still open. Try again.');
-          this.objective = 'Mission 2 — High Roller: deliver the car to the Luna Casino. 90s on the clock.';
-          g.setObjective(this.objective);
-        } else {
-          const s = Math.ceil(this.timer);
-          g.setObjective(`Mission 2 — High Roller: reach the Luna Casino. ${s}s left.`);
+        game.toast('Four thugs in the plaza. Put them down.');
+      }
+      if (people.countThugsAlive(true) === 0 && people.countThugsDown(true) >= 4) {
+        complete(DEFS[2].payout, 0);
+      }
+    } else if (index === 3) {
+      if (fareState === 'toPickup' && inCar && pickup) {
+        const car = game.vehicles.playerCar;
+        const d = Math.hypot(car.mesh.position.x - pickup.x, car.mesh.position.z - pickup.z);
+        if (d < 7) {
+          fareState = 'toDrop';
+          game.toast('Fare picked up. Drive to the marker.');
         }
-        break;
-      }
-      case 2: {
-        if (g.people.thugs.length === 0) this._complete();
-        break;
-      }
-      case 3: {
-        const fare = FARES[this.fareIndex];
-        const target = this.fareStage === 'pickup' ? fare.pickup : fare.drop;
-        if (car && this._dist2(px, pz, target[0], target[1]) < 144) { // within 12 m
-          if (this.fareStage === 'pickup') {
-            this.fareStage = 'drop';
-            g.toast('Passenger aboard. Drop them off.');
-            g.setObjective(`Mission 4 — Cab Hustle: drop fare ${this.fareIndex + 1} of 3 at (${fare.drop[0]}, ${fare.drop[1]}).`);
+      } else if (fareState === 'toDrop' && inCar && dest) {
+        const car = game.vehicles.playerCar;
+        const d = Math.hypot(car.mesh.position.x - dest.x, car.mesh.position.z - dest.z);
+        if (d < 8) {
+          faresDone += 1;
+          game.addCash(250);
+          game.audio.coin();
+          if (faresDone >= 3) {
+            game.audio.missionDone();
+            game.toast('Night Shift done — $750 in fares.');
+            startMission(4);
+            game.onMissionComplete();
           } else {
-            g.addCash(250, 'Taxi fare');
-            g.audio.coin();
-            this.fareIndex++;
-            this.fareStage = 'pickup';
-            if (this.fareIndex >= FARES.length) {
-              this._complete();
-            } else {
-              g.toast(`Fare paid: +$250. Fare ${this.fareIndex + 1} of 3 next.`);
-              g.setObjective(`Mission 4 — Cab Hustle: pick up fare ${this.fareIndex + 1} of 3.`);
-            }
+            game.toast(`Fare ${faresDone}/3 paid +$250. Next fare...`);
+            newFare();
           }
-        } else if (this.fareStage === 'pickup') {
-          g.setObjective(`Mission 4 — Cab Hustle: pick up fare ${this.fareIndex + 1} of 3 at (${fare.pickup[0]}, ${fare.pickup[1]}).`);
         }
-        break;
       }
-      case 4: {
-        const p = g.people;
-        if (p.thugs.length === 0 && !p.boss) this._complete();
-        break;
+    } else if (index === 4) {
+      if (!spawned) {
+        spawned = true;
+        people.spawnBoss(city.tower.x, city.tower.z + 22);
+        for (let i = 0; i < 4; i += 1) {
+          people.spawnThug(city.tower.x + [-10, 10, -6, 6][i], city.tower.z + 22 + [-4, 4, 8, -6][i], 60, true);
+        }
+        game.toast('Vic Marino and his crew are waiting at the Meridian Tower.');
+      }
+      const boss = people.boss;
+      if (boss && boss.down) {
+        complete(DEFS[4].payout, 0);
       }
     }
   }
+
+  function setIndex(i) {
+    // Used by save/load: jump straight to a mission without the intro toast.
+    index = i;
+    spawned = false;
+    if (i === 0) phase = 'needCar';
+    if (i === 1) { phase = 'drive'; timer = 90; }
+    if (i === 2) phase = 'fight';
+    if (i === 3) { phase = 'taxi'; faresDone = 0; fareState = 'toPickup'; newFare(); }
+    if (i === 4) phase = 'boss';
+  }
+
+  return {
+    defs: DEFS,
+    get index() { return index; },
+    get name() { return index < 5 ? DEFS[index].name : 'Free Roam'; },
+    objective, marker, update, startMission, setIndex,
+    get phase() { return phase; },
+    get faresDone() { return faresDone; },
+  };
 }
