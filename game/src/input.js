@@ -1,83 +1,78 @@
-// Keyboard and mouse input for Solmar Bay (v10).
-// Keys are tracked by `code` (KeyW, ArrowUp, Space, ...). Held state is live;
-// pressed edges are collected on keydown and snapshotted once per frame at the
-// start of the loop, so a slow frame (software renderer at ~1 fps) never
-// swallows a tap. The engine calls snapshot() first thing every frame, then
-// reads framePressed for one-shot actions (E, F, Space, H, L, N, C, P).
+// Keyboard + mouse input. Keys are tracked by `code` (KeyW, ArrowUp, ...).
+// `held` is the live state; `framePressed` is a per-frame snapshot of the
+// edges that fired since the last frame — it is a COPY, never an alias, so a
+// slow frame can never swallow a key press. Call beginFrame() once per game
+// loop tick, before any system reads input.
 
-export function createInput() {
-  const held = Object.create(null);
-  const pressed = Object.create(null);
-  let framePressed = Object.create(null);
-  let mouseClicked = false;
-  let frameClicked = false;
-  let enabled = true;
+export class Input {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.held = Object.create(null);
+    this.pressed = Object.create(null);
+    this.framePressed = Object.create(null);
+    this.mouseDown = false;
+    this.mousePressed = false;
+    this.mouseX = 0;
+    this.mouseY = 0;
+    this.anyKey = false;
 
-  function onKeyDown(e) {
-    if (!enabled) return;
-    const c = e.code;
-    if (c === 'Space' || c.startsWith('Arrow')) e.preventDefault();
-    if (!e.repeat) pressed[c] = true;
-    held[c] = true;
-  }
-  function onKeyUp(e) {
-    held[e.code] = false;
-  }
-  function onMouseDown(e) {
-    if (!enabled) return;
-    if (e.button === 0) mouseClicked = true;
-  }
-  function onBlur() {
-    for (const k of Object.keys(held)) held[k] = false;
-  }
-
-  window.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keyup', onKeyUp);
-  window.addEventListener('blur', onBlur);
-  window.addEventListener('mousedown', onMouseDown);
-
-  function snapshot() {
-    // Copy, do not alias: framePressed must keep the keys after pressed is
-    // cleared for the next frame.
-    framePressed = { ...pressed };
-    for (const k of Object.keys(pressed)) delete pressed[k];
-    frameClicked = mouseClicked;
-    mouseClicked = false;
+    window.addEventListener('keydown', (event) => {
+      if (event.repeat) return;
+      if (!this.held[event.code]) this.pressed[event.code] = true;
+      this.held[event.code] = true;
+      this.anyKey = true;
+      // Keep the page from scrolling on arrows / space while playing.
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) {
+        event.preventDefault();
+      }
+    });
+    window.addEventListener('keyup', (event) => {
+      this.held[event.code] = false;
+    });
+    window.addEventListener('blur', () => {
+      this.held = Object.create(null);
+    });
+    canvas.addEventListener('mousedown', (event) => {
+      this.mouseDown = true;
+      this.mousePressed = true;
+      this.mouseX = event.clientX;
+      this.mouseY = event.clientY;
+    });
+    window.addEventListener('mouseup', () => {
+      this.mouseDown = false;
+    });
   }
 
-  function isHeld(...codes) {
-    for (const c of codes) if (held[c]) return true;
-    return false;
-  }
-  function wasPressed(...codes) {
-    for (const c of codes) if (framePressed[c]) return true;
-    return false;
-  }
-  function clicked() {
-    return frameClicked;
-  }
-  function setEnabled(v) {
-    enabled = v;
-    if (!v) {
-      for (const k of Object.keys(held)) held[k] = false;
-    }
-  }
-  function moveVector() {
-    // Returns {x, z} in camera-relative space: x right, z forward (toward
-    // where the camera looks). WASD and arrows both work.
-    let x = 0;
-    let z = 0;
-    if (isHeld('KeyW', 'ArrowUp')) z += 1;
-    if (isHeld('KeyS', 'ArrowDown')) z -= 1;
-    if (isHeld('KeyA', 'ArrowLeft')) x -= 1;
-    if (isHeld('KeyD', 'ArrowRight')) x += 1;
-    const len = Math.hypot(x, z);
-    if (len > 1) { x /= len; z /= len; }
-    return { x, z };
-  }
-  function sprinting() {
-    return isHeld('ShiftLeft', 'ShiftRight');
+  // Snapshot the edges that fired since the last frame. Must run once per
+  // tick, before the game reads anything.
+  beginFrame() {
+    // Copy, not alias: framePressed must survive the pressed map being
+    // cleared below.
+    this.framePressed = { ...this.pressed };
+    this.pressed = Object.create(null);
+    const mouse = this.mousePressed;
+    this.mousePressed = false;
+    return mouse;
   }
 
-  return { snapshot, isHeld, wasPressed, clicked, setEnabled, moveVector, sprinting, held };
+  isDown(...codes) {
+    return codes.some((code) => !!this.held[code]);
+  }
+
+  wasPressed(...codes) {
+    return codes.some((code) => !!this.framePressed[code]);
+  }
+
+  // Movement axes in [-1, 1]: forward/back and left/right.
+  moveAxes() {
+    const forward = (this.isDown('KeyW', 'ArrowUp') ? 1 : 0) - (this.isDown('KeyS', 'ArrowDown') ? 1 : 0);
+    const strafe = (this.isDown('KeyD', 'ArrowRight') ? 1 : 0) - (this.isDown('KeyA', 'ArrowLeft') ? 1 : 0);
+    return { forward, strafe };
+  }
+
+  driveAxes() {
+    const throttle = (this.isDown('KeyW', 'ArrowUp') ? 1 : 0) - (this.isDown('KeyS', 'ArrowDown') ? 1 : 0);
+    const steer = (this.isDown('KeyA', 'ArrowLeft') ? 1 : 0) - (this.isDown('KeyD', 'ArrowRight') ? 1 : 0);
+    return { throttle, steer };
+  }
 }

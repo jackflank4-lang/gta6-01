@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -6,113 +6,114 @@
 <title>Solmar Bay — Neon Heat</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #160b2e;
-    font-family: 'Segoe UI', Arial, Helvetica, sans-serif; color: #f0ead8; }
-  #game-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
-  .hud { position: fixed; pointer-events: none; z-index: 5; }
-  #hud-top { top: 12px; left: 14px; display: flex; gap: 18px; align-items: center;
-    background: rgba(10, 8, 24, 0.55); border: 1px solid rgba(255, 122, 60, 0.35);
-    border-radius: 10px; padding: 8px 14px; }
-  #hud-cash { font-size: 22px; font-weight: 800; color: #7ddc7a; letter-spacing: 0.5px; }
-  #hud-health { display: flex; align-items: center; gap: 6px; }
-  #hud-health-bar { width: 110px; height: 12px; background: #222; border-radius: 6px; overflow: hidden; border: 1px solid #555; }
-  #hud-health-fill { height: 100%; width: 100%; background: #37d67a; }
-  #hud-health-text { font-size: 13px; font-weight: 700; }
-  #hud-stars { font-size: 19px; letter-spacing: 2px; color: #888; }
-  #hud-clock { font-size: 18px; font-weight: 700; color: #ffd24a; }
-  #hud-objective { top: 60px; left: 50%; transform: translateX(-50%); max-width: 46%;
-    text-align: center; font-size: 15px; font-weight: 600; color: #e8f4ff;
-    background: rgba(10, 8, 24, 0.55); border: 1px solid rgba(34, 229, 255, 0.35);
-    border-radius: 10px; padding: 8px 14px; }
-  #hud-extra { top: 12px; right: 14px; text-align: right; font-size: 13px; color: #b8c4d8;
-    background: rgba(10, 8, 24, 0.55); border: 1px solid rgba(184, 196, 216, 0.25);
-    border-radius: 10px; padding: 8px 12px; line-height: 1.5; }
-  #hud-speed { bottom: 16px; right: 16px; font-size: 26px; font-weight: 800; color: #fff;
-    text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
-  #hud-toast { top: 108px; left: 50%; transform: translateX(-50%); width: 520px; max-width: 80%;
-    display: flex; flex-direction: column; align-items: center; gap: 6px; }
-  .toast-item { background: rgba(10, 8, 24, 0.78); border: 1px solid rgba(255, 210, 74, 0.5);
-    color: #ffe9a8; font-size: 15px; font-weight: 600; border-radius: 8px; padding: 7px 14px;
-    transition: opacity 0.6s; }
-  .toast-fade { opacity: 0; }
-  #minimap-wrap { bottom: 16px; left: 16px; width: 184px; height: 184px; }
-  #minimap { width: 180px; height: 180px; border-radius: 50%; border: 3px solid rgba(255, 122, 60, 0.6);
-    background: #12141d; box-shadow: 0 0 18px rgba(0,0,0,0.6); }
-  .overlay { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 14px; text-align: center;
-    background: radial-gradient(ellipse at center, rgba(22, 11, 46, 0.82), rgba(8, 4, 18, 0.94)); }
-  .overlay h1 { font-size: 54px; font-weight: 900; letter-spacing: 3px; color: #ff7a3c;
-    text-shadow: 0 0 24px rgba(255, 122, 60, 0.65), 0 3px 0 #7a1e3c; }
-  .overlay h2 { font-size: 20px; font-weight: 600; color: #22e5ff; letter-spacing: 6px; }
-  .overlay p { max-width: 560px; font-size: 15px; line-height: 1.55; color: #d8d2e8; }
-  .overlay .controls { font-size: 13.5px; color: #aab4c8; background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 12px 18px; line-height: 1.7; }
-  .overlay .controls b { color: #ffd24a; }
-  .menu-btn { pointer-events: auto; cursor: pointer; font-size: 18px; font-weight: 800; letter-spacing: 1px;
-    color: #160b2e; background: linear-gradient(180deg, #ffb03c, #ff7a3c); border: none; border-radius: 10px;
-    padding: 12px 34px; box-shadow: 0 4px 0 #7a1e3c, 0 6px 18px rgba(0,0,0,0.5); }
-  .menu-btn:hover { filter: brightness(1.12); }
-  .menu-btn.secondary { background: linear-gradient(180deg, #3ec6e0, #1a7a9a); color: #06222e;
-    box-shadow: 0 4px 0 #0a3a4a, 0 6px 18px rgba(0,0,0,0.5); }
-  #menu-save-note { font-size: 14px; color: #8fd48f; }
-  #end-title { font-size: 64px; }
-  #end-text { font-size: 17px; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0e1a;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: #f2f2f2; }
+  #game-canvas { display: block; width: 100vw; height: 100vh; }
+  .hud { position: fixed; z-index: 10; pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
+  .panel { background: rgba(8, 10, 24, .55); border: 1px solid rgba(255, 255, 255, .14);
+    border-radius: 10px; padding: 8px 12px; backdrop-filter: blur(2px); }
+  #hud-stats { top: 12px; left: 12px; display: flex; flex-direction: column; gap: 6px; }
+  #hud-cash { font-size: 22px; font-weight: 800; color: #7dff9e; letter-spacing: .5px; }
+  #hud-health { width: 190px; height: 12px; background: rgba(255,255,255,.18); border-radius: 6px; overflow: hidden; }
+  #hud-health-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #ff5d5d, #ff9d5d); }
+  #hud-health-label { font-size: 11px; letter-spacing: 2px; color: #ffb3b3; }
+  #hud-clock-stars { top: 12px; right: 12px; text-align: right; }
+  #hud-clock { font-size: 20px; font-weight: 700; }
+  #hud-day { font-size: 11px; color: #aab4ff; letter-spacing: 1px; }
+  #hud-stars { font-size: 24px; letter-spacing: 3px; color: #ffd23e; margin-top: 2px; min-height: 30px; }
+  #hud-objective { top: 64px; left: 50%; transform: translateX(-50%); max-width: 560px; text-align: center;
+    font-size: 15px; font-weight: 600; color: #ffe9a8; }
+  #hud-toast { top: 116px; left: 50%; transform: translateX(-50%); text-align: center;
+    font-size: 16px; font-weight: 700; color: #ffffff; opacity: 0; transition: opacity .25s; }
+  #hud-speed { bottom: 16px; left: 16px; font-size: 26px; font-weight: 800; }
+  #hud-speed small { font-size: 13px; color: #9fd8ff; }
+  #hud-radio { bottom: 16px; left: 16px; margin-bottom: 44px; font-size: 13px; color: #ffd9f2; }
+  #hud-minimap { bottom: 14px; right: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35);
+    box-shadow: 0 0 0 4px rgba(8,10,24,.5); background: rgba(8,10,24,.6); }
+  #hud-hint { bottom: 14px; left: 50%; transform: translateX(-50%); font-size: 12px; color: rgba(255,255,255,.75);
+    background: rgba(8,10,24,.45); padding: 5px 10px; border-radius: 8px; }
+  #hud-damage { position: fixed; inset: 0; z-index: 9; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(255,0,0,.45) 100%); }
+  .overlay { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(160deg, rgba(10,8,32,.68), rgba(40,6,54,.62)); }
+  .overlay.hidden { display: none; }
+  .card { text-align: center; max-width: 640px; padding: 28px 36px; }
+  .card h1 { font-size: 54px; font-weight: 900; letter-spacing: 2px; line-height: 1.02;
+    background: linear-gradient(90deg, #ff5da2, #ffb13e, #37e0ff); -webkit-background-clip: text;
+    background-clip: text; color: transparent; }
+  .card h2 { font-size: 20px; letter-spacing: 6px; color: #8ef1ff; margin-top: 4px; }
+  .card p { margin-top: 14px; font-size: 15px; line-height: 1.55; color: #dfe4ff; }
+  .card .keys { margin-top: 16px; font-size: 13px; line-height: 1.9; color: #b9c2ff; }
+  .card .keys b { color: #ffe9a8; }
+  .btn { pointer-events: auto; cursor: pointer; margin-top: 22px; display: inline-block;
+    font-size: 18px; font-weight: 800; letter-spacing: 1px; color: #0b0e1a;
+    background: linear-gradient(90deg, #ff5da2, #ffb13e); border: none; border-radius: 999px;
+    padding: 13px 34px; box-shadow: 0 6px 24px rgba(255, 93, 162, .45); }
+  .btn:hover { filter: brightness(1.1); }
+  .btn.ghost { background: transparent; color: #dfe4ff; border: 1px solid rgba(255,255,255,.4);
+    box-shadow: none; font-size: 15px; padding: 10px 22px; margin-left: 10px; }
+  #end-title { font-size: 44px; }
+  #end-title.busted { color: #7db4ff; }
+  #end-title.wasted { color: #ff5d5d; }
 </style>
-<script>
-  // Collect page errors before the game modules load, so the test driver can
-  // read them from window.__errors at any time.
-  window.__errors = [];
-  window.__shotReady = false;
-  window.addEventListener('error', function (e) {
-    window.__errors.push(String((e && e.message) || (e && e.error) || 'error'));
-  });
-  window.addEventListener('unhandledrejection', function (e) {
-    window.__errors.push('rejection: ' + String((e && e.reason) || 'rejection'));
-  });
-</script>
 </head>
 <body>
 <canvas id="game-canvas"></canvas>
+<div id="hud-damage"></div>
 
-<div class="hud" id="hud-top">
-  <span id="hud-cash">$200</span>
-  <span id="hud-health"><span id="hud-health-bar"><span id="hud-health-fill"></span></span><span id="hud-health-text">100</span></span>
-  <span id="hud-stars">☆☆☆☆☆</span>
-  <span id="hud-clock">19:40</span>
+<div id="hud-stats" class="hud panel">
+  <div id="hud-cash">$200</div>
+  <div id="hud-health"><div id="hud-health-fill"></div></div>
+  <div id="hud-health-label">HEALTH</div>
 </div>
-<div class="hud" id="hud-objective">Mission 1 — Hot Wheels: steal a car (E near a parked car).</div>
-<div class="hud" id="hud-extra"><span id="hud-radio">♪ NEON 88.4</span><br><span id="hud-camera">CAM NEAR</span></div>
-<div class="hud" id="hud-toast"></div>
-<div class="hud" id="hud-speed"></div>
-<div class="hud" id="minimap-wrap"><canvas id="minimap" width="180" height="180"></canvas></div>
 
-<div class="overlay" id="menu">
-  <h1>SOLMAR BAY</h1>
-  <h2>NEON HEAT</h2>
-  <p>Lena Cruz runs with the Barracuda crew in the dusk-lit coastal city of Solmar Bay.
-  Vic Marino owns the streets — take his city back, one mission at a time. Steal cars,
-  outrun the PD, collect neon coins, and finish what the crew started.</p>
-  <div class="controls">
-    <b>WASD / Arrows</b> move &amp; drive &nbsp;·&nbsp; <b>E</b> enter / exit car &nbsp;·&nbsp; <b>F / Click</b> punch<br>
-    <b>Space</b> jump &nbsp;·&nbsp; <b>H</b> horn &nbsp;·&nbsp; <b>L</b> headlights &nbsp;·&nbsp; <b>N</b> radio<br>
-    <b>C</b> camera &nbsp;·&nbsp; <b>P / Esc</b> pause &nbsp;·&nbsp; <b>Shift</b> sprint
+<div id="hud-clock-stars" class="hud panel">
+  <div id="hud-clock">18:00</div>
+  <div id="hud-day">SOLMAR BAY &middot; DAY 1</div>
+  <div id="hud-stars"></div>
+</div>
+
+<div id="hud-objective" class="hud panel">Meet the crew at the hideout.</div>
+<div id="hud-toast" class="hud"></div>
+
+<div id="hud-speed" class="hud" style="display:none">0 <small>km/h</small></div>
+<div id="hud-radio" class="hud">RADIO: Neon FM</div>
+<canvas id="hud-minimap" class="hud" width="170" height="170"></canvas>
+<div id="hud-hint" class="hud">WASD move &middot; E enter/exit car &middot; F punch &middot; Space jump &middot; H horn &middot; L lights &middot; N radio &middot; C camera &middot; P pause</div>
+
+<div id="menu-overlay" class="overlay">
+  <div class="card">
+    <h1>SOLMAR BAY</h1>
+    <h2>NEON HEAT</h2>
+    <p>Lena Cruz is back in Solmar Bay, and Vic Marino owns the night. Run with the
+    Barracuda crew, steal what you need, outrun the Solmar PD, and take the city back —
+    one neon-lit job at a time.</p>
+    <div class="keys">
+      <b>WASD / Arrows</b> move &amp; drive &nbsp;&middot;&nbsp; <b>E</b> enter / exit car &nbsp;&middot;&nbsp;
+      <b>F</b> or click punch<br>
+      <b>Space</b> jump &nbsp;&middot;&nbsp; <b>H</b> horn &nbsp;&middot;&nbsp; <b>L</b> headlights &nbsp;&middot;&nbsp;
+      <b>N</b> radio &nbsp;&middot;&nbsp; <b>C</b> camera &nbsp;&middot;&nbsp; <b>P</b> pause
+    </div>
+    <button id="menu-start" class="btn">START ENGINE</button>
+    <button id="menu-continue" class="btn ghost" style="display:none">CONTINUE</button>
   </div>
-  <button class="menu-btn" id="btn-start">START GAME</button>
-  <button class="menu-btn secondary" id="btn-continue" style="display:none">CONTINUE</button>
-  <div id="menu-save-note"></div>
 </div>
 
-<div class="overlay" id="pause-menu" style="display:none">
-  <h1 style="font-size:42px">PAUSED</h1>
-  <p>Progress autosaves. Take a breath — the Bay will wait.</p>
-  <button class="menu-btn" id="btn-resume">RESUME</button>
-  <button class="menu-btn secondary" id="btn-quit">QUIT TO MENU</button>
+<div id="pause-overlay" class="overlay hidden">
+  <div class="card">
+    <h1 style="font-size:40px">PAUSED</h1>
+    <p id="pause-save-note">Progress autosaved.</p>
+    <button id="pause-resume" class="btn">RESUME</button>
+    <button id="pause-menu" class="btn ghost">QUIT TO MENU</button>
+  </div>
 </div>
 
-<div class="overlay" id="end-overlay" style="display:none">
-  <h1 id="end-title">BUSTED</h1>
-  <p id="end-text"></p>
-  <button class="menu-btn" id="btn-respawn">BACK TO THE STREETS</button>
+<div id="end-overlay" class="overlay hidden">
+  <div class="card">
+    <h1 id="end-title">BUSTED</h1>
+    <p id="end-text"></p>
+    <button id="end-respawn" class="btn">BACK ON THE STREETS</button>
+  </div>
 </div>
 
 <script src="vendor/three.min.js"></script>

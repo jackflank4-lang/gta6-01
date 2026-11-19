@@ -1,55 +1,65 @@
-// Seeded random numbers for Solmar Bay (v10).
-// SplitMix32: small, fast, deterministic. One stream drives the city layout,
-// traffic and pedestrians so the city is identical on every run.
+// Seeded random numbers (mulberry32) — one deterministic stream drives the
+// city layout, traffic colours, pedestrians and coin placement, so the same
+// seed always builds the same Solmar Bay.
 
-export function hashString(str) {
-  let h = 2166136261 >>> 0;
-  for (let i = 0; i < str.length; i += 1) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619);
+export class Rng {
+  constructor(seed = 777) {
+    // Force the seed into an unsigned 32-bit integer.
+    this.state = (seed >>> 0) || 0x9e3779b9;
   }
-  return h >>> 0;
+
+  // Next float in [0, 1).
+  next() {
+    this.state = (this.state + 0x6d2b79f5) >>> 0;
+    let t = this.state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+
+  // Float in [min, max).
+  range(min, max) {
+    return min + this.next() * (max - min);
+  }
+
+  // Integer in [min, max] (inclusive).
+  int(min, max) {
+    return Math.floor(this.range(min, max + 1));
+  }
+
+  // One element of an array, uniformly.
+  pick(list) {
+    return list[Math.floor(this.next() * list.length)];
+  }
+
+  // True with probability p (0..1).
+  chance(p) {
+    return this.next() < p;
+  }
+
+  // Approximately normal value in [-1, 1] (sum of three uniforms).
+  gaussian() {
+    return (this.next() + this.next() + this.next() - 1.5) / 1.5;
+  }
+
+  // Fisher-Yates shuffle, in place, returning the same array.
+  shuffle(list) {
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(this.next() * (i + 1));
+      const tmp = list[i];
+      list[i] = list[j];
+      list[j] = tmp;
+    }
+    return list;
+  }
 }
 
-export function createRng(seed) {
-  let s = (seed >>> 0) || 1;
-  function next() {
-    s = (s + 0x9e3779b9) >>> 0;
-    let z = s;
-    z = Math.imul(z ^ (z >>> 16), 0x21f0aaad);
-    z = Math.imul(z ^ (z >>> 15), 0x735a2d97);
-    return ((z ^ (z >>> 15)) >>> 0) / 4294967296;
+// Small string hash (FNV-1a) — turns a name like "meridian" into a seed.
+export function hashString(text) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
   }
-  function range(min, max) {
-    return min + next() * (max - min);
-  }
-  function int(min, max) {
-    return Math.floor(range(min, max + 1));
-  }
-  function pick(arr) {
-    return arr[Math.floor(next() * arr.length)];
-  }
-  function chance(p) {
-    return next() < p;
-  }
-  function gaussian() {
-    // Box-Muller, mean 0, stddev ~1.
-    const u = Math.max(next(), 1e-9);
-    const v = next();
-    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-  }
-  function shuffle(arr) {
-    const a = arr.slice();
-    for (let i = a.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(next() * (i + 1));
-      const t = a[i];
-      a[i] = a[j];
-      a[j] = t;
-    }
-    return a;
-  }
-  function seedFrom(str) {
-    return createRng(hashString(str));
-  }
-  return { next, range, int, pick, chance, gaussian, shuffle, seedFrom };
+  return h >>> 0;
 }

@@ -1,75 +1,64 @@
-// A tiny static server for game/ (Node 22, standard library only), so the
-// entry can be played locally with no build step:
-//   node serve.ts            serves game/ on http://localhost:8080
-//   node serve.ts --port 9000
-// It sends the MIME types a browser game needs and refuses any path outside
-// game/. A development convenience, not a server for the internet.
+// Solmar Bay — Neon Heat (gta6-01, round 8 / v10.1).
+// Tiny static file server for local play-testing only (never part of the
+// graded entry — the game itself is plain static files under game/).
+// Serves game/ at the root, plus shots.json and screenshots/ from the repo.
+//   node serve.ts            (PORT env var, default 8080)
+//   http://localhost:8080
 
-import { createReadStream, statSync } from 'node:fs';
+import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { extname, join, normalize, resolve, sep } from 'node:path';
+import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = resolve(fileURLToPath(new URL('./game', import.meta.url)));
-const argv = process.argv.slice(2);
-const portArg = argv.indexOf('--port');
-const wanted = portArg === -1 ? 8080 : Number(argv[portArg + 1]);
-const port = Number.isInteger(wanted) && wanted > 0 && wanted < 65536 ? wanted : 8080;
+const repoRoot = fileURLToPath(new URL('.', import.meta.url));
+const port = Number(process.env.PORT ?? 8080);
+const gameRoot = join(repoRoot, 'game');
 
-const MIME = {
+const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
+  '.png': 'image/png',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
-  '.woff2': 'font/woff2',
-  '.glb': 'model/gltf-binary',
-  '.gltf': 'model/gltf+json',
-  '.bin': 'application/octet-stream',
-  '.wasm': 'application/wasm',
-  '.wav': 'audio/wav',
-  '.mp3': 'audio/mpeg',
-  '.ogg': 'audio/ogg',
   '.txt': 'text/plain; charset=utf-8',
 };
 
-createServer((request, response) => {
-  const url = new URL(request.url ?? '/', 'http://127.0.0.1');
-  let pathname;
-  try {
-    pathname = decodeURIComponent(url.pathname);
-  } catch {
-    response.writeHead(400).end('bad request');
+// Map a request path to a file on disk. A leading /shots.json or
+// /screenshots/... reads from the repo root; everything else reads from
+// game/ (so /index.html is game/index.html). Paths that climb out of their
+// root are refused.
+function resolveFile(urlPath: string): string | null {
+  const clean = decodeURIComponent(urlPath.split('?')[0].split('#')[0]);
+  let base = gameRoot;
+  let rel = clean === '/' ? 'index.html' : clean.replace(/^\/+/, '');
+  if (rel === 'shots.json' || rel.startsWith('screenshots' + sep) || rel.startsWith('screenshots/')) {
+    base = repoRoot;
+  }
+  const file = resolve(base, rel);
+  if (!file.startsWith(base + sep) && file !== base) return null;
+  if (!existsSync(file) || !statSync(file).isFile()) return null;
+  return file;
+}
+
+const server = createServer((req, res) => {
+  const file = resolveFile(req.url ?? '/');
+  if (!file) {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('not found\n');
     return;
   }
-  if (pathname.endsWith('/')) pathname += 'index.html';
-  const file = resolve(join(root, normalize(pathname)));
-  if (file !== root && !file.startsWith(root + sep)) {
-    response.writeHead(403).end('forbidden');
-    return;
-  }
-  let size;
-  try {
-    const stats = statSync(file);
-    if (!stats.isFile()) throw new Error('not a file');
-    size = stats.size;
-  } catch {
-    response.writeHead(404).end('not found');
-    return;
-  }
-  response.writeHead(200, {
+  res.writeHead(200, {
     'content-type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream',
-    'content-length': size,
     'cache-control': 'no-store',
   });
-  createReadStream(file).pipe(response);
-}).listen(port, '127.0.0.1', () => {
-  console.log(`Solmar Bay is on http://localhost:${port}`);
+  createReadStream(file).pipe(res);
+});
+
+server.listen(port, () => {
+  console.log(`Solmar Bay — Neon Heat at http://localhost:${port} (serving ${gameRoot})`);
 });
